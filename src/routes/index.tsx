@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Nav } from "@/components/ds/nav";
 import { Hero } from "@/components/ds/hero";
 import { Assistant } from "@/components/ds/assistant";
+import { ExpertChat } from "@/components/ds/expert-chat";
 import {
   FinalCta,
   Footer,
@@ -40,6 +41,7 @@ function Index() {
         <HowItWorks />
         <TalkToData />
         <Assistant />
+        <ExpertChat />
         <InsightCards />
         <NoSkills />
         <UseCases />

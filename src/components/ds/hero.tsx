@@ -97,6 +97,14 @@ export function Hero() {
               Meet the AI Assistant
             </a>
           </div>
+          <a
+            href="#expert-chat"
+            className="animate-rise mx-auto mt-6 flex w-fit items-center gap-2.5 rounded-full border border-border bg-card/60 px-4 py-2 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+          >
+            <span className="size-1.5 rounded-full bg-primary animate-dot" />
+            Also an expert chat for data science, AI/ML, RAG & SQL questions
+            <span className="text-primary">→</span>
+          </a>
         </div>
 
         <div className="animate-rise mt-16 lg:mt-20">
