@@ -236,7 +236,11 @@ export function Assistant() {
   const [input, setInput] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => () => timer.current && clearTimeout(timer.current), []);
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, []);
 
   const ask = (index: number) => {
     if (timer.current) clearTimeout(timer.current);
