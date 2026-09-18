@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Nav } from "@/components/ds/nav";
 import { Hero } from "@/components/ds/hero";
 import { Assistant } from "@/components/ds/assistant";
+import { ExpertChat } from "@/components/ds/expert-chat";
 import {
   FinalCta,
   Footer,
@@ -15,7 +16,7 @@ import {
 
 const title = "DataSimplr — Make Data Simple for Outcomes";
 const description =
-  "Upload documents, spreadsheets and datasets. Ask questions in plain language and let AI turn complex data into clear insights and actionable outcomes.";
+  "Upload documents, spreadsheets and datasets and ask in plain language — plus an expert AI chat for data science, machine learning, RAG, evaluation and SQL questions.";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -40,6 +41,7 @@ function Index() {
         <HowItWorks />
         <TalkToData />
         <Assistant />
+        <ExpertChat />
         <InsightCards />
         <NoSkills />
         <UseCases />
