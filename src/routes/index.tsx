@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Nav } from "@/components/ds/nav";
 import { Hero } from "@/components/ds/hero";
+import { Assistant } from "@/components/ds/assistant";
 import {
-  AiDemo,
   FinalCta,
   Footer,
   HowItWorks,
@@ -39,7 +39,7 @@ function Index() {
         <Hero />
         <HowItWorks />
         <TalkToData />
-        <AiDemo />
+        <Assistant />
         <InsightCards />
         <NoSkills />
         <UseCases />

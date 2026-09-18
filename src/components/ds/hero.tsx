@@ -91,10 +91,10 @@ export function Hero() {
               Analyze Your Data →
             </a>
             <a
-              href="#how-it-works"
+              href="#assistant"
               className="w-full rounded-xl border border-border bg-card px-6 py-3.5 text-sm font-semibold text-foreground transition-colors hover:border-primary sm:w-auto"
             >
-              See How It Works
+              Meet the AI Assistant
             </a>
           </div>
         </div>
