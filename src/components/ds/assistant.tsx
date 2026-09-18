@@ -255,7 +255,7 @@ export function Assistant() {
     setInput("");
   };
 
-  const current = conversations[step];
+  const current = conversations[step] ?? conversations[0]!;
 
   return (
     <section id="assistant" className="relative border-t border-border py-24">
