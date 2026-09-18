@@ -463,7 +463,7 @@ export function ExpertChat() {
                 key={t.key}
                 onClick={() => open(i)}
                 className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  active === i && !thinking
+                  mode === "topic" && active === i && !thinking
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -478,12 +478,12 @@ export function ExpertChat() {
             <div className="space-y-6 p-5 sm:p-7">
               <div className="flex justify-end">
                 <p className="max-w-[85%] rounded-2xl bg-primary px-4 py-2.5 text-sm text-primary-foreground">
-                  {current.question}
+                  {asked}
                 </p>
               </div>
 
               {thinking ? (
-                <Trace lines={current.answer.trace} />
+                <Trace lines={answer.trace} />
               ) : (
                 <div className="animate-rise space-y-5">
                   <div className="flex flex-wrap items-center gap-2">
