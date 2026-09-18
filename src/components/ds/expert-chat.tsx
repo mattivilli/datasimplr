@@ -389,6 +389,8 @@ function Blocks({ blocks }: { blocks: Block[] }) {
 
 export function ExpertChat() {
   const [active, setActive] = useState(0);
+  const [mode, setMode] = useState<"topic" | "general">("topic");
+  const [asked, setAsked] = useState(topics[0]!.question);
   const [thinking, setThinking] = useState(false);
   const [input, setInput] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -399,11 +401,18 @@ export function ExpertChat() {
     };
   }, []);
 
-  const open = (index: number) => {
+  const run = () => {
     if (timer.current) clearTimeout(timer.current);
-    setActive(index);
     setThinking(true);
     timer.current = setTimeout(() => setThinking(false), 950);
+  };
+
+  const open = (index: number) => {
+    const topic = topics[index] ?? topics[0]!;
+    setMode("topic");
+    setActive(index);
+    setAsked(topic.question);
+    run();
   };
 
   const submit = (text: string) => {
@@ -419,16 +428,16 @@ export function ExpertChat() {
         best = i;
       }
     });
-    if (best >= 0) open(best);
-    else {
-      if (timer.current) clearTimeout(timer.current);
-      setThinking(true);
-      timer.current = setTimeout(() => setThinking(false), 950);
+    if (best >= 0) {
+      open(best);
+    } else {
+      setMode("general");
+      setAsked(text.trim());
+      run();
     }
   };
 
-  const current = topics[active] ?? topics[0]!;
-  const answer = current.answer;
+  const answer = mode === "general" ? general : (topics[active] ?? topics[0]!).answer;
 
   return (
     <section id="expert-chat" className="relative border-t border-border py-24">
