@@ -38,6 +38,7 @@ import {
 } from "@/lib/analysis";
 import { parseUploadedFile } from "@/lib/parse-file";
 import { WithPythonSplit } from "@/components/workspace/with-python-split";
+import { saveActiveDataset } from "@/lib/dataset-store";
 
 const sample = `region,month,revenue,units,refunds
 North,Jul,412300,1820,4200
@@ -104,6 +105,11 @@ export function AnalyticsStudio({
     setXCol(numeric[0] ?? nums[0] ?? "");
     setYCol(numeric[1] ?? numeric[0] ?? "");
     setMultiCols(numeric.slice(0, Math.max(1, numeric.length - 1)));
+    void saveActiveDataset({
+      csv: tableToCsv(result.table),
+      fileName: name ?? "pasted data",
+      columns: result.table.columns,
+    });
   };
 
   const onFile = async (file: File | null) => {
@@ -118,7 +124,13 @@ export function AnalyticsStudio({
   };
 
   const reclean = (nextFill = fill, nextDups = removeDups) => {
-    setCleaned(cleanTable(raw, { fill: nextFill, removeDuplicates: nextDups }));
+    const result = cleanTable(raw, { fill: nextFill, removeDuplicates: nextDups });
+    setCleaned(result);
+    void saveActiveDataset({
+      csv: tableToCsv(result.table),
+      fileName: fileName ?? "pasted data",
+      columns: result.table.columns,
+    });
   };
 
   const stats = describeNumeric(table);
@@ -481,7 +493,7 @@ export function AnalyticsStudio({
       </div>
 
       <div className="order-first min-w-0 xl:order-none">
-        <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 xl:hidden">
+        <div className="sticky top-16 z-20 -mx-1 mb-3 flex gap-2 overflow-x-auto bg-background/90 px-1 py-2 backdrop-blur-md xl:hidden">
           {tabs.map((t) => (
             <button
               key={t.key}
@@ -494,7 +506,7 @@ export function AnalyticsStudio({
             </button>
           ))}
         </div>
-        <div className="panel hidden h-fit p-5 xl:block">
+        <div className="panel sticky top-20 hidden h-fit p-5 xl:block">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">Data science tools</p>
           <div className="mt-3 space-y-2">
             {tabs.map((t) => (

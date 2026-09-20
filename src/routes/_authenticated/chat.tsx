@@ -6,6 +6,7 @@ import { Loader2, Paperclip, Plus, Send, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { askAssistant, DEFAULT_GROQ_MODEL, GROQ_MODELS } from "@/lib/ai.functions";
 import { ANALYZE_PROMPT, prepareChatFile, type ChatAttachment } from "@/lib/chat-context";
+import { saveActiveDataset } from "@/lib/dataset-store";
 import { WorkspaceShell } from "@/components/workspace/shell";
 import { MarkdownMessage } from "@/components/workspace/markdown-message";
 import { CopyButton, extractCodeBlocks } from "@/components/workspace/copy-button";
@@ -155,6 +156,13 @@ function ChatPage() {
       const prepared = await prepareChatFile(file);
       setAttachment(prepared);
       attachmentRef.current = prepared;
+      if (prepared.csv) {
+        await saveActiveDataset({
+          csv: prepared.csv,
+          fileName: prepared.name,
+          columns: prepared.columns ?? [],
+        });
+      }
       submit(ANALYZE_PROMPT);
     } catch (e) {
       setFileError(e instanceof Error ? e.message : "Could not read that file.");

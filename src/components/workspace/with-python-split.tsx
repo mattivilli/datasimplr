@@ -44,7 +44,7 @@ export function WithPythonSplit({
 
   return (
     <div className="min-w-0">
-      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+      <div className="sticky top-16 z-30 mb-3 flex flex-wrap items-center justify-end gap-2 bg-background/90 py-1 backdrop-blur-md">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -58,21 +58,23 @@ export function WithPythonSplit({
       {!open && children}
 
       {open && wide && (
-        <ResizablePanelGroup orientation="horizontal" className="min-h-[78vh] rounded-2xl border border-border">
-          <ResizablePanel defaultSize={58} minSize={32} className="min-w-0 overflow-auto p-3 sm:p-4">
-            {children}
-          </ResizablePanel>
-          <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={42} minSize={28} className="min-w-0 overflow-hidden">
-            <PythonLab csv={csv} fileName={fileName} columns={columns} seedCode={seed} />
-          </ResizablePanel>
-        </ResizablePanelGroup>
+        <div className="sticky top-[4.75rem] z-20 h-[calc(100dvh-5.25rem)]">
+          <ResizablePanelGroup orientation="horizontal" className="h-full rounded-2xl border border-border">
+            <ResizablePanel defaultSize={56} minSize={32} className="min-w-0 overflow-auto p-3 sm:p-4">
+              {children}
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            <ResizablePanel defaultSize={44} minSize={30} className="min-h-0 min-w-0 overflow-hidden">
+              <PythonLab csv={csv} fileName={fileName} columns={columns} seedCode={seed} />
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </div>
       )}
 
       {open && !wide && (
-        <div className="flex min-w-0 flex-col gap-4">
-          {children}
-          <div className="min-h-[420px]">
+        <div className="flex min-w-0 flex-col">
+          <div className="min-w-0 pb-[46vh]">{children}</div>
+          <div className="fixed inset-x-0 bottom-0 z-40 h-[44vh] border-t border-border bg-background p-2 shadow-[0_-12px_40px_-24px_var(--glow)]">
             <PythonLab csv={csv} fileName={fileName} columns={columns} seedCode={seed} />
           </div>
         </div>

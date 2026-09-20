@@ -113,3 +113,56 @@ export const askAssistant = createServerFn({ method: "POST" })
     };
   });
 
+const fixSchema = z.object({
+  code: z.string().min(1).max(12000),
+  error: z.string().min(1).max(6000),
+  columns: z.array(z.string()).max(40).optional(),
+  fileName: z.string().max(200).optional(),
+});
+
+export const fixPython = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => fixSchema.parse(data))
+  .handler(async ({ data }) => {
+    const apiKey = process.env["GROQ_API_KEY"];
+    if (!apiKey || !apiKey.startsWith("gsk_")) {
+      return { reply: "Groq is not configured. Add GROQ_API_KEY in .env.local.", code: "" };
+    }
+
+    const cols = data.columns?.length ? data.columns.join(", ") : "unknown";
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: DEFAULT_GROQ_MODEL,
+        temperature: 0.2,
+        max_tokens: 900,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You fix Python for DataSimplr's browser lab. Only pandas, numpy, matplotlib. plt is already imported. df is already loaded from the uploaded file. Never use sklearn, tensorflow, torch, requests, or open(). Return a short diagnosis, then one ```python``` block with the full corrected script.",
+          },
+          {
+            role: "user",
+            content: `File: ${data.fileName ?? "uploaded.csv"}\nColumns: ${cols}\n\nCode:\n\`\`\`python\n${data.code}\n\`\`\`\n\nError:\n${data.error}`,
+          },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text();
+      console.error("Groq fix error", res.status, detail);
+      return { reply: "I couldn't reach Groq to fix this. Try again in a moment.", code: "" };
+    }
+
+    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    const reply = json.choices?.[0]?.message?.content?.trim() ?? "";
+    const match = reply.match(/```(?:python)?\n([\s\S]*?)```/i);
+    return { reply, code: match?.[1]?.trim() ?? "" };
+  });
+
