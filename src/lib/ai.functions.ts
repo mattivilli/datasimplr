@@ -21,7 +21,7 @@ const schema = z.object({
     )
     .min(1)
     .max(40),
-  context: z.string().max(4000).optional(),
+  context: z.string().max(16000).optional(),
   model: z.string().max(80).optional(),
 });
 
@@ -49,8 +49,9 @@ If asked about unrelated topics (cooking, sports, politics, coding unrelated to 
 ## Response Style
 - Be concise but thorough. Use bullet points and bold for key metrics.
 - Use emojis sparingly for visual clarity.
+- When a dataset or document is attached, ground every claim in that file. Quote column names and actual numbers. Do not invent rows.
 - When referencing statistics, use exact numbers from the dataset context.
-- If suggesting a next step, reference the DataSimplr panel it corresponds to.
+- If suggesting a next step, point to DataSimplr tools (cleaning, correlation, regression, clustering, PCA).
 - For code examples, use Python with pandas/scikit-learn.
 - Always provide a "Next Step" or "Action" at the end of analytical responses.
 - You MUST provide all your responses entirely in English.`;
@@ -81,7 +82,7 @@ export const askAssistant = createServerFn({ method: "POST" })
         model,
         messages: [{ role: "system", content: system }, ...data.messages.slice(-12)],
         temperature: 0.65,
-        max_tokens: 1800,
+        max_tokens: 900,
         top_p: 0.9,
       }),
     });
