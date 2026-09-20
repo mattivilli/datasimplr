@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, FileText, LogOut, Menu, MessageSquare, Settings, Upload, X, Zap } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, FileText, LogOut, Menu, MessageSquare, Settings, Upload, X, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ds/theme-toggle";
+import { ScrollTop } from "@/components/workspace/scroll-top";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
@@ -50,8 +51,20 @@ export function WorkspaceShell({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: profile } = useProfile();
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    setCollapsed(localStorage.getItem("ds_nav_collapsed") === "1");
+  }, []);
+
+  const toggleNav = () => {
+    setCollapsed((v) => {
+      const next = !v;
+      localStorage.setItem("ds_nav_collapsed", next ? "1" : "0");
+      return next;
+    });
+  };
 
   const signOut = async () => {
     await queryClient.cancelQueries();
@@ -64,28 +77,31 @@ export function WorkspaceShell({
 
   const sidebar = (
     <div className="flex h-full flex-col">
-      <Link to="/dashboard" className="flex items-center gap-2 px-5 py-5">
-        <span className="flex size-8 items-center justify-center rounded-lg bg-primary">
+      <Link to="/dashboard" className={`flex items-center gap-2 py-5 ${collapsed ? "justify-center px-2" : "px-5"}`}>
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary">
           <Zap className="size-4 text-primary-foreground" />
         </span>
-        <span className="font-display text-base font-bold tracking-tight">DataSimplr</span>
+        {!collapsed && <span className="font-display text-base font-bold tracking-tight">DataSimplr</span>}
       </Link>
 
-      <nav className="flex-1 space-y-1 px-3">
+      <nav className="flex-1 space-y-1 px-2">
         {nav.map((item) => {
           const active = pathname === item.to || pathname.startsWith(`${item.to}/`);
           return (
             <Link
               key={item.to}
               to={item.to}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${
+              title={item.label}
+              className={`flex items-center rounded-xl py-2.5 text-sm transition-colors ${
+                collapsed ? "justify-center px-2" : "gap-3 px-3"
+              } ${
                 active
                   ? "bg-accent text-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
-              <item.icon className={`size-4 ${active ? "text-primary" : ""}`} />
-              {item.label}
+              <item.icon className={`size-4 shrink-0 ${active ? "text-primary" : ""}`} />
+              {!collapsed && item.label}
             </Link>
           );
         })}
@@ -100,10 +116,12 @@ export function WorkspaceShell({
               {initials}
             </span>
           )}
-          <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate text-xs font-semibold">{profile?.displayName ?? "…"}</p>
-            <p className="truncate text-[11px] text-muted-foreground">{profile?.email}</p>
-          </div>
+          {!collapsed && (
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className="truncate text-xs font-semibold">{profile?.displayName ?? "…"}</p>
+              <p className="truncate text-[11px] text-muted-foreground">{profile?.email}</p>
+            </div>
+          )}
           <button onClick={signOut} aria-label="Sign out" className="p-1 text-subtle hover:text-foreground">
             <LogOut className="size-4" />
           </button>
@@ -114,8 +132,20 @@ export function WorkspaceShell({
 
   return (
     <div className="min-h-screen bg-background">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-border bg-muted/40 lg:block">
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 hidden border-r border-border bg-muted/40 transition-[width] duration-200 lg:block ${
+          collapsed ? "w-[4.25rem]" : "w-64"
+        }`}
+      >
         {sidebar}
+        <button
+          type="button"
+          aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+          onClick={toggleNav}
+          className="absolute -right-3 top-20 z-50 flex size-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm hover:border-primary hover:text-foreground"
+        >
+          {collapsed ? <ChevronRight className="size-3.5" /> : <ChevronLeft className="size-3.5" />}
+        </button>
       </aside>
 
       {open && (
@@ -127,8 +157,8 @@ export function WorkspaceShell({
         </div>
       )}
 
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/85 px-5 py-4 backdrop-blur-xl lg:px-8">
+      <div className={`transition-[padding] duration-200 ${collapsed ? "lg:pl-[4.25rem]" : "lg:pl-64"}`}>
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/85 px-4 py-3 backdrop-blur-xl sm:px-5 lg:px-8">
           <button
             aria-label="Menu"
             onClick={() => setOpen(true)}
@@ -146,7 +176,10 @@ export function WorkspaceShell({
           </div>
         </header>
 
-        <main className="min-w-0 px-4 py-5 sm:px-5 sm:py-7 lg:px-8">{children}</main>
+        <main className="min-w-0 px-4 py-5 sm:px-5 sm:py-7 lg:px-8">
+          {children}
+          <ScrollTop />
+        </main>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Code2, X } from "lucide-react";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { PythonLab } from "./python-lab";
 
@@ -50,7 +50,7 @@ export function WithPythonSplit({
           onClick={() => setOpen((v) => !v)}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:border-primary hover:text-foreground"
         >
-          {open ? <X className="size-3.5" /> : <Code2 className="size-3.5 text-primary" />}
+          {open ? <PanelRightClose className="size-3.5" /> : <PanelRightOpen className="size-3.5 text-primary" />}
           {open ? "Hide Python lab" : "Python lab"}
         </button>
       </div>

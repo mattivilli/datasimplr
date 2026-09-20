@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Paperclip, Plus, Send, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Paperclip, Plus, Send, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { askAssistant, DEFAULT_GROQ_MODEL, GROQ_MODELS } from "@/lib/ai.functions";
 import { ANALYZE_PROMPT, prepareChatFile, type ChatAttachment } from "@/lib/chat-context";
@@ -12,6 +12,7 @@ import { MarkdownMessage } from "@/components/workspace/markdown-message";
 import { CopyButton, extractCodeBlocks } from "@/components/workspace/copy-button";
 import { Button } from "@/components/ui/button";
 import { openPythonLab, WithPythonSplit } from "@/components/workspace/with-python-split";
+import { ScrollTop } from "@/components/workspace/scroll-top";
 
 export const Route = createFileRoute("/_authenticated/chat")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -53,7 +54,9 @@ function ChatPage() {
   const [readingFile, setReadingFile] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
   const attachmentRef = useRef<ChatAttachment | null>(null);
+  const [chatsOpen, setChatsOpen] = useState(true);
   attachmentRef.current = attachment;
 
   const { data: conversations } = useQuery({
@@ -81,8 +84,23 @@ function ChatPage() {
   });
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth" });
+    const el = threadRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (nearBottom || pending) bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, pending]);
+
+  useEffect(() => {
+    setChatsOpen(localStorage.getItem("ds_chats_collapsed") !== "1");
+  }, []);
+
+  const toggleChats = () => {
+    setChatsOpen((v) => {
+      const next = !v;
+      localStorage.setItem("ds_chats_collapsed", next ? "0" : "1");
+      return next;
+    });
+  };
 
   const send = useMutation({
     mutationFn: async (text: string) => {
@@ -184,30 +202,38 @@ function ChatPage() {
       title="AI Chat"
       subtitle="GPT-OSS 20B by default — cheapest Groq model that still reasons well over your files."
       actions={
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="max-w-[11rem] rounded-lg border border-border bg-muted px-2 py-1.5 text-xs sm:max-w-none"
-            aria-label="Groq model"
-          >
-            {GROQ_MODELS.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.badge} · {m.label}
-              </option>
-            ))}
-          </select>
-          <Button variant="outline" size="sm" onClick={() => navigate({ search: {} })}>
-            <Plus className="mr-1.5 size-4" /> New chat
-          </Button>
-        </div>
+        <select
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          className="max-w-[11rem] rounded-lg border border-border bg-muted px-2 py-1.5 text-xs sm:max-w-none"
+          aria-label="Groq model"
+        >
+          {GROQ_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.badge} · {m.label}
+            </option>
+          ))}
+        </select>
       }
     >
       <WithPythonSplit csv={attachment?.csv} fileName={attachment?.name} columns={attachment?.columns}>
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
-        <div className="panel h-fit p-4">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">Saved chats</p>
-          <div className="mt-3 space-y-1.5">
+      <div className={`grid min-h-[calc(100dvh-8.5rem)] min-w-0 gap-3 ${chatsOpen ? "lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)]" : "lg:grid-cols-[auto_minmax(0,1fr)]"}`}>
+        <div className={`relative min-w-0 ${chatsOpen ? "" : "lg:w-10"}`}>
+          <button
+            type="button"
+            aria-label={chatsOpen ? "Hide chats" : "Show chats"}
+            onClick={toggleChats}
+            className="absolute -right-2 top-4 z-20 hidden size-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground lg:flex"
+          >
+            {chatsOpen ? <ChevronLeft className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+          </button>
+          {chatsOpen ? (
+        <div className="panel flex h-full max-h-[calc(100dvh-8.5rem)] flex-col p-3">
+          <Button className="w-full shrink-0" size="sm" onClick={() => navigate({ search: {} })}>
+            <Plus className="mr-1.5 size-4" /> New chat
+          </Button>
+          <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">Saved chats</p>
+          <div className="mt-2 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
             {(conversations?.length ?? 0) === 0 && (
               <p className="text-sm text-muted-foreground">No saved chats yet.</p>
             )}
@@ -235,14 +261,21 @@ function ChatPage() {
             ))}
           </div>
         </div>
+          ) : (
+            <div className="hidden h-full items-start pt-12 lg:flex">
+              <span className="sr-only">Chats collapsed</span>
+            </div>
+          )}
+        </div>
 
-        <div className="panel flex min-h-[60vh] min-w-0 flex-col overflow-hidden">
-          <div className="flex-1 space-y-4 p-5">
+        <div className="panel relative flex min-h-[70vh] min-w-0 flex-col overflow-hidden lg:min-h-0 lg:h-[calc(100dvh-8.5rem)]">
+          <div ref={threadRef} className="relative min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
+            <ScrollTop target={threadRef} local />
             {!c && !pending && (
               <div className="mx-auto max-w-lg py-10 text-center">
-                <h2 className="font-display text-xl font-semibold">Upload a file and ask</h2>
+                <h2 className="font-display text-2xl font-semibold tracking-tight">Start a briefing</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Drop Excel, CSV, JSON or a text report. I will profile it and answer from that data.
+                  Drop a spreadsheet or ask a question. Answers stay in this thread; Python lab is one click away.
                 </p>
                 <button
                   type="button"
@@ -339,7 +372,7 @@ function ChatPage() {
               e.preventDefault();
               onPickFile(e.dataTransfer.files[0] ?? null);
             }}
-            className="flex items-center gap-2 border-t border-border bg-muted px-4 py-3"
+            className="flex items-end gap-2 border-t border-border bg-muted/80 px-3 py-3 sm:px-4"
           >
             <input
               ref={fileRef}
@@ -357,11 +390,18 @@ function ChatPage() {
             >
               <Paperclip className="size-4" />
             </button>
-            <input
+            <textarea
               value={input}
+              rows={1}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={attachment ? `Ask about ${attachment.name}…` : "Attach a file or ask about data…"}
-              className="flex-1 bg-transparent px-1 py-2 text-sm outline-none placeholder:text-subtle"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  submit(input);
+                }
+              }}
+              placeholder={attachment ? `Ask about ${attachment.name}…` : "Ask about your data, or drop a file…"}
+              className="max-h-28 min-h-[40px] flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none placeholder:text-subtle"
             />
             <button
               type="submit"

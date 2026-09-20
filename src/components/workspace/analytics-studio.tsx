@@ -486,7 +486,7 @@ export function AnalyticsStudio({
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <Button onClick={run} disabled={busy || table.rows.length === 0} className="w-full">
+        <Button onClick={run} disabled={busy || table.rows.length === 0} className="sticky bottom-3 z-10 w-full shadow-[0_12px_32px_-12px_var(--glow)]">
           {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : onSave ? <Play className="mr-2 size-4" /> : <Sparkles className="mr-2 size-4" />}
           {onSave ? `Run and save ${TOOLS.find((t) => t.key === tool)!.name}` : `Run ${TOOLS.find((t) => t.key === tool)!.name}`}
         </Button>

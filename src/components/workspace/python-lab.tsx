@@ -173,8 +173,8 @@ export function PythonLab({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="sticky top-0 z-20 flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2">
         <Terminal className="size-4 text-primary" />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold">Python visual lab</p>
@@ -263,6 +263,16 @@ export function PythonLab({
           </div>
         )}
       </div>
+
+      <button
+        type="button"
+        onClick={run}
+        disabled={busy}
+        className="absolute bottom-3 right-3 z-30 flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-[0_12px_32px_-12px_var(--glow)] disabled:opacity-50"
+      >
+        {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+        Run
+      </button>
     </div>
   );
 }
