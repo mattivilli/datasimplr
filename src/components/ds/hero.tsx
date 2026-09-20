@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { ProductMock } from "./product-mock";
 
 function HeroBackground() {
@@ -83,19 +84,19 @@ export function Hero() {
             turn complex data into clear insights and actionable outcomes.
           </p>
           <div className="animate-rise mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a
-              href="#product"
+            <Link
+              to="/try"
               className="w-full rounded-xl bg-primary px-6 py-3.5 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 sm:w-auto"
               style={{ boxShadow: "0 18px 40px -18px var(--glow)" }}
             >
               Analyze Your Data →
-            </a>
-            <a
-              href="#assistant"
+            </Link>
+            <Link
+              to="/auth"
               className="w-full rounded-xl border border-border bg-card px-6 py-3.5 text-sm font-semibold text-foreground transition-colors hover:border-primary sm:w-auto"
             >
               Meet the AI Assistant
-            </a>
+            </Link>
           </div>
           <a
             href="#expert-chat"

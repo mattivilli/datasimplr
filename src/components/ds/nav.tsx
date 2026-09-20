@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Menu, X, Zap } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -51,15 +52,15 @@ export function Nav() {
 
         <div className="hidden items-center gap-4 lg:flex">
           <ThemeToggle />
-          <a href="#pricing" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <Link to="/auth" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
             Sign In
-          </a>
-          <a
-            href="#product"
+          </Link>
+          <Link
+            to="/try"
             className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5"
           >
             Start Analyzing →
-          </a>
+          </Link>
         </div>
 
         <div className="flex items-center gap-3 lg:hidden">
@@ -83,13 +84,13 @@ export function Nav() {
                 {l.label}
               </a>
             ))}
-            <a
-              href="#product"
+            <Link
+              to="/try"
               onClick={() => setOpen(false)}
               className="rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground"
             >
               Start Analyzing →
-            </a>
+            </Link>
           </div>
         </div>
       )}

@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   ArrowRight,
@@ -406,15 +407,16 @@ export function Pricing() {
                   </li>
                 ))}
               </ul>
-              <button
-                className={`mt-7 rounded-xl px-5 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5 ${
+              <Link
+                to={p.name === "Enterprise" ? "/auth" : "/try"}
+                className={`mt-7 rounded-xl px-5 py-3 text-center text-sm font-semibold transition-transform hover:-translate-y-0.5 ${
                   p.featured
                     ? "bg-primary text-primary-foreground"
                     : "border border-border bg-muted text-foreground"
                 }`}
               >
                 {p.cta}
-              </button>
+              </Link>
             </div>
           ))}
         </div>
@@ -444,12 +446,12 @@ export function FinalCta() {
           in plain language.
         </p>
         <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <a
-            href="#top"
+          <Link
+            to="/try"
             className="w-full rounded-xl bg-primary px-6 py-3.5 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 sm:w-auto"
           >
             Analyze Your Data →
-          </a>
+          </Link>
           <a
             href="#pricing"
             className="w-full rounded-xl border border-border bg-card px-6 py-3.5 text-sm font-semibold transition-colors hover:border-primary sm:w-auto"

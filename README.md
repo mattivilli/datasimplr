@@ -1,24 +1,40 @@
-# Pixel Perfect Screenshot
+# DataSimplr
 
-Implement exactly the screenshot and nothing else
+Make data simple for outcomes. Upload spreadsheets, clean them, run statistics, regression, clustering and PCA, then ask an AI analyst in plain language.
 
-This project was built with [Lovable](https://lovable.dev).
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/1fd0b36c-eade-4280-ad3a-0c81ad3cccec).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+## Local development
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+git clone https://github.com/mattivilli/datasimplr.git
+cd datasimplr
+npm install
 npm run dev
 ```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+- Public analytics workspace: `/try` (no account)
+- Saved workspace, chats and analyses: `/auth` then `/dashboard`
+
+## What’s included
+
+- Excel / CSV / JSON upload (parsed in the browser)
+- Missing-value fill, duplicate removal
+- Descriptive stats, correlation heatmap
+- Simple and multiple linear regression
+- K-means clustering and PCA
+- Executive insights
+- Optional saved AI chats (set `XAI_API_KEY`)
+
+## Environment
+
+Copy `.env.example` to `.env`. Supabase holds accounts and saved analyses. SpaceXAI (`XAI_API_KEY`, `https://api.x.ai/v1`) powers the expert chat.
+
+## Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Dev server |
+| `npm run build` | Production build |
+| `npm run preview` | Preview production build |
+| `npm run lint` | ESLint |

@@ -25,24 +25,24 @@ export const askAssistant = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => schema.parse(data))
   .handler(async ({ data }) => {
-    const apiKey = process.env["LOVABLE_API_KEY"];
+    const apiKey = process.env["XAI_API_KEY"];
     if (!apiKey) {
       return {
         reply:
-          "The AI service isn't configured for this workspace yet, so I can't generate a live answer. Your chat is still saved — try again once AI access is available.",
+          "The AI service isn't configured yet. Add XAI_API_KEY to your environment, then ask again. Your chat is still saved.",
       };
     }
 
     const system = data.context ? `${SYSTEM}\n\nDataset context:\n${data.context}` : SYSTEM;
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3.8-flash",
+        model: "grok-4.5",
         messages: [{ role: "system", content: system }, ...data.messages],
       }),
     });
