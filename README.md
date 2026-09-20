@@ -24,11 +24,11 @@ Open [http://localhost:3000](http://localhost:3000).
 - Simple and multiple linear regression
 - K-means clustering and PCA
 - Executive insights
-- Optional saved AI chats (set `XAI_API_KEY`)
+- Optional saved AI chats (set `GROQ_API_KEY`)
 
 ## Environment
 
-Copy `.env.example` to `.env`. Supabase holds accounts and saved analyses. SpaceXAI (`XAI_API_KEY`, `https://api.x.ai/v1`) powers the expert chat.
+Copy `.env.example` to `.env` / `.env.local`. Supabase holds accounts and saved analyses. Groq (`GROQ_API_KEY`, `https://api.groq.com/openai/v1`) powers the expert chat.
 
 ## Scripts
 

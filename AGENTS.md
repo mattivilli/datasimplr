@@ -6,6 +6,6 @@ Analytics math is in `src/lib/analysis.ts`. File parsers are in `src/lib/parse-f
 
 Public try-it path: `/try`. Authenticated analyze path: `/analyze`.
 
-AI chat uses SpaceXAI (`XAI_API_KEY` → `https://api.x.ai/v1`, model `grok-4.5`) in `src/lib/ai.functions.ts`. Keep keys server-side.
+AI chat uses Groq (`GROQ_API_KEY` → `https://api.groq.com/openai/v1`) in `src/lib/ai.functions.ts`. Keep keys in `.env.local`, never in source.
 
 Avoid force-pushing or rewriting published git history on `main`.

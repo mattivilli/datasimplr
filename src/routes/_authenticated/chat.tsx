@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Plus, Send, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { askAssistant } from "@/lib/ai.functions";
+import { askAssistant, DEFAULT_GROQ_MODEL, GROQ_MODELS } from "@/lib/ai.functions";
 import { WorkspaceShell } from "@/components/workspace/shell";
 import { Button } from "@/components/ui/button";
 
@@ -42,6 +42,7 @@ function ChatPage() {
   const ask = useServerFn(askAssistant);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState<string | null>(null);
+  const [model, setModel] = useState<string>(DEFAULT_GROQ_MODEL);
   const bottom = useRef<HTMLDivElement>(null);
 
   const { data: conversations } = useQuery({
@@ -101,7 +102,7 @@ function ChatPage() {
         { role: "user" as const, content: text },
       ];
 
-      const { reply } = await ask({ data: { messages: history.slice(-20) } });
+      const { reply } = await ask({ data: { messages: history.slice(-20), model } });
 
       await supabase
         .from("messages")
@@ -139,11 +140,25 @@ function ChatPage() {
   return (
     <WorkspaceShell
       title="AI Chat"
-      subtitle="Every conversation is saved to your workspace."
+      subtitle="Groq models — same setup as the original localhost DataSimplr chat."
       actions={
-        <Button variant="outline" size="sm" onClick={() => navigate({ search: {} })}>
-          <Plus className="mr-1.5 size-4" /> New chat
-        </Button>
+        <div className="flex items-center gap-2">
+          <select
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            className="rounded-lg border border-border bg-muted px-2 py-1.5 text-xs"
+            aria-label="Groq model"
+          >
+            {GROQ_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.badge} · {m.label}
+              </option>
+            ))}
+          </select>
+          <Button variant="outline" size="sm" onClick={() => navigate({ search: {} })}>
+            <Plus className="mr-1.5 size-4" /> New chat
+          </Button>
+        </div>
       }
     >
       <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
