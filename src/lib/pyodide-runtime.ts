@@ -1,7 +1,7 @@
 type Pyodide = {
   loadPackage: (names: string[]) => Promise<void>;
   FS: {
-    writeFile: (path: string, data: string) => void;
+    writeFile: (path: string, data: string | Uint8Array) => void;
     mkdir: (path: string) => void;
     chdir: (path: string) => void;
     analyzePath: (path: string) => { exists: boolean };
@@ -97,9 +97,10 @@ export async function runPython(code: string, csv?: string, fileName?: string | 
     }
   }
   py.FS.chdir(work);
-  for (const path of [`${work}/data.csv`, `${work}/${original}`, `${work}/${stemCsv}`, `/tmp/data.csv`, `/${original}`]) {
+  const bytes = new TextEncoder().encode(payload);
+  for (const path of [`${work}/data.csv`, `${work}/${original}`, `${work}/${stemCsv}`, `/tmp/data.csv`]) {
     try {
-      py.FS.writeFile(path, payload);
+      py.FS.writeFile(path, bytes);
     } catch {
       /* skip illegal alias */
     }
@@ -110,58 +111,55 @@ export async function runPython(code: string, csv?: string, fileName?: string | 
 import io, sys, traceback, base64, contextlib, os
 from pathlib import Path
 import pandas as pd
+from pandas.io.parsers.readers import read_csv as _ORIG_READ_CSV
 import matplotlib.pyplot as plt
 
 plt.close("all")
 os.chdir("/work")
 DATA_PATH = "/work/data.csv"
 _ORIG = ${JSON.stringify(original)}
-try:
-    df = pd.read_csv(DATA_PATH)
-except Exception:
-    df = pd.DataFrame()
 
-_real_csv = pd.read_csv
-_real_table = getattr(pd, "read_table", _real_csv)
-_real_excel = getattr(pd, "read_excel", None)
-_real_json = getattr(pd, "read_json", None)
+# Always call the real pandas parser — never pd.read_csv (that may already be wrapped).
+pd.read_csv = _ORIG_READ_CSV
+pd.read_table = _ORIG_READ_CSV
 
 def _resolve(path):
-    p = str(path)
-    if os.path.exists(p):
-        return p
-    name = os.path.basename(p)
-    for cand in (p, f"/work/{name}", f"/work/{Path(name).stem}.csv", "/work/data.csv", f"/{name}", DATA_PATH):
-        if os.path.exists(cand):
+    name = os.path.basename(str(path))
+    for cand in (
+        str(path),
+        f"/work/{name}",
+        f"/work/{Path(name).stem}.csv",
+        "/work/data.csv",
+        DATA_PATH,
+    ):
+        if cand and os.path.isfile(cand) and os.path.getsize(cand) > 0:
             return cand
     return DATA_PATH
 
-def _read_csv(path, *args, **kwargs):
-    return _real_csv(_resolve(path), *args, **kwargs)
+def _safe_read(path, *args, **kwargs):
+    kwargs.pop("encoding_errors", None)
+    return _ORIG_READ_CSV(_resolve(path), *args, **kwargs)
 
-def _read_table(path, *args, **kwargs):
-    return _real_table(_resolve(path), *args, **kwargs)
+pd.read_csv = _safe_read
+pd.read_table = _safe_read
+pd.read_excel = lambda path, *a, **k: _ORIG_READ_CSV(_resolve(path))
 
-def _read_excel(path, *args, **kwargs):
-    return _real_csv(_resolve(path))
-
-def _read_json(path, *args, **kwargs):
-    try:
-        return _real_json(_resolve(path), *args, **kwargs) if _real_json else _real_csv(DATA_PATH)
-    except Exception:
-        return _real_csv(DATA_PATH)
-
-pd.read_csv = _read_csv
-pd.read_table = _read_table
-pd.read_excel = _read_excel
-if _real_json:
-    pd.read_json = _read_json
+_load_err = None
+try:
+    df = _ORIG_READ_CSV(DATA_PATH)
+except Exception:
+    _load_err = traceback.format_exc()
+    df = pd.DataFrame()
 
 _buf = io.StringIO()
 _err = None
 _ns = {"df": df, "pd": pd, "plt": plt, "DATA_PATH": DATA_PATH, "os": os, "__name__": "__main__"}
 with contextlib.redirect_stdout(_buf), contextlib.redirect_stderr(_buf):
-    print("Loaded", _ORIG, "→", DATA_PATH, "shape", df.shape)
+    if _load_err:
+        print("Could not parse uploaded CSV at", DATA_PATH)
+        print(_load_err)
+    else:
+        print("Loaded", _ORIG, "→", DATA_PATH, "shape", tuple(df.shape), "columns", list(df.columns)[:12])
     try:
         exec(Path("/tmp/user.py").read_text(), _ns)
     except Exception:
