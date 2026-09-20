@@ -133,7 +133,7 @@ export function PythonLab({
         setStatus("This snippet needs libraries the lab cannot load.");
         return;
       }
-      const result = await runPython(code, data);
+      const result = await runPython(code, data, boundName || fileName);
       setStdout(result.stdout);
       setImages(result.images);
       setError(result.error ?? null);

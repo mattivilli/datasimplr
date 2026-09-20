@@ -144,7 +144,7 @@ export const fixPython = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "You fix Python for DataSimplr's browser lab. Only pandas, numpy, matplotlib. plt is already imported. df is already loaded from the uploaded file. Never use sklearn, tensorflow, torch, requests, or open(). Return a short diagnosis, then one ```python``` block with the full corrected script.",
+              "You fix Python for DataSimplr's browser lab. Only pandas, numpy, matplotlib. plt is already imported. df is already loaded. The upload also lives at DATA_PATH (/work/data.csv) and under its original filename in /work. If code calls pd.read_csv('some name.csv'), that is fine. Never invent another path. Never use sklearn, tensorflow, torch, requests, or open(). Return a short diagnosis, then one ```python``` block with the full corrected script.",
           },
           {
             role: "user",
