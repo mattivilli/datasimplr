@@ -8,6 +8,7 @@ import { askAssistant, DEFAULT_GROQ_MODEL, GROQ_MODELS } from "@/lib/ai.function
 import { ANALYZE_PROMPT, prepareChatFile, type ChatAttachment } from "@/lib/chat-context";
 import { WorkspaceShell } from "@/components/workspace/shell";
 import { MarkdownMessage } from "@/components/workspace/markdown-message";
+import { CopyButton, extractCodeBlocks } from "@/components/workspace/copy-button";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/chat")({
@@ -268,10 +269,7 @@ function ChatPage() {
                     {m.content}
                   </div>
                 ) : (
-                  <div className="max-w-[92%] rounded-2xl border border-border bg-card px-5 py-4 shadow-[0_18px_40px_-28px_var(--glow)]">
-                    <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-primary">DataSimplr AI</p>
-                    <MarkdownMessage content={m.content} />
-                  </div>
+                  <AssistantReply content={m.content} />
                 )}
               </div>
             ))}
@@ -367,5 +365,22 @@ function ChatPage() {
         </div>
       </div>
     </WorkspaceShell>
+  );
+}
+
+function AssistantReply({ content }: { content: string }) {
+  const code = extractCodeBlocks(content)
+    .map((b) => b.code)
+    .join("\n\n");
+
+  return (
+    <div className="max-w-[92%] rounded-2xl border border-border bg-card px-5 py-4 shadow-[0_18px_40px_-28px_var(--glow)]">
+      <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-primary">DataSimplr AI</p>
+      <MarkdownMessage content={content} />
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3">
+        <CopyButton value={content} label="Copy reply" copiedLabel="Copied reply" />
+        {code ? <CopyButton value={code} label="Copy all code" copiedLabel="Copied code" /> : null}
+      </div>
+    </div>
   );
 }

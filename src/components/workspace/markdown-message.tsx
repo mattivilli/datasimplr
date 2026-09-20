@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from "react";
+import { CopyButton } from "./copy-button";
 
 function inline(text: string): ReactNode[] {
   const parts: ReactNode[] = [];
@@ -69,11 +70,17 @@ export function MarkdownMessage({ content }: { content: string }) {
         i += 1;
       }
       i += 1;
+      const source = code.join("\n");
       blocks.push(
-        <pre key={k++} className="overflow-x-auto rounded-xl border border-border bg-background px-3 py-2.5 font-mono text-[11px] leading-relaxed text-muted-foreground">
-          {lang && <div className="mb-1 font-sans text-[10px] uppercase tracking-widest text-subtle">{lang}</div>}
-          {code.join("\n")}
-        </pre>,
+        <div key={k++} className="overflow-hidden rounded-xl border border-border bg-background">
+          <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-subtle">{lang || "code"}</span>
+            <CopyButton value={source} label="Copy code" copiedLabel="Copied code" />
+          </div>
+          <pre className="overflow-x-auto px-3 py-2.5 font-mono text-[11px] leading-relaxed text-muted-foreground">
+            {source}
+          </pre>
+        </div>,
       );
       continue;
     }
