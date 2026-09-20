@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { askAssistant, DEFAULT_GROQ_MODEL, GROQ_MODELS } from "@/lib/ai.functions";
 import { ANALYZE_PROMPT, prepareChatFile, type ChatAttachment } from "@/lib/chat-context";
 import { WorkspaceShell } from "@/components/workspace/shell";
+import { MarkdownMessage } from "@/components/workspace/markdown-message";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/chat")({
@@ -171,7 +172,7 @@ function ChatPage() {
   return (
     <WorkspaceShell
       title="AI Chat"
-      subtitle="Groq models — same setup as the original localhost DataSimplr chat."
+      subtitle="GPT-OSS 20B by default — cheapest Groq model that still reasons well over your files."
       actions={
         <div className="flex items-center gap-2">
           <select
@@ -262,15 +263,16 @@ function ChatPage() {
 
             {messages?.map((m) => (
               <div key={m.id} className={m.role === "user" ? "flex justify-end" : ""}>
-                <div
-                  className={
-                    m.role === "user"
-                      ? "max-w-[80%] whitespace-pre-wrap rounded-2xl bg-primary px-4 py-2.5 text-sm text-primary-foreground"
-                      : "max-w-[90%] whitespace-pre-wrap rounded-2xl border border-border bg-muted px-4 py-3 text-sm leading-relaxed text-foreground"
-                  }
-                >
-                  {m.content}
-                </div>
+                {m.role === "user" ? (
+                  <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl bg-primary px-4 py-2.5 text-sm text-primary-foreground">
+                    {m.content}
+                  </div>
+                ) : (
+                  <div className="max-w-[92%] rounded-2xl border border-border bg-card px-5 py-4 shadow-[0_18px_40px_-28px_var(--glow)]">
+                    <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-primary">DataSimplr AI</p>
+                    <MarkdownMessage content={m.content} />
+                  </div>
+                )}
               </div>
             ))}
 

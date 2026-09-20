@@ -3,13 +3,14 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export const GROQ_MODELS = [
-  { id: "qwen/qwen3.8-27b", label: "Qwen 3.8 27B", badge: "Best", desc: "Recommended — most reliable" },
-  { id: "groq/compound", label: "Groq Compound", badge: "Smart", desc: "Most capable compound model" },
-  { id: "groq/compound-mini", label: "Groq Compound Mini", badge: "Fast", desc: "Fast & reliable compound model" },
-  { id: "allam-2-7b", label: "Allam 2 7B", badge: "New", desc: "Specialized 7B model" },
+  { id: "openai/gpt-oss-20b", label: "GPT-OSS 20B", badge: "Economy", desc: "Best cost / speed on Groq free" },
+  { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B", badge: "Smart", desc: "Best free reasoning for analysis" },
+  { id: "qwen/qwen3.8-27b", label: "Qwen 3.8 27B", badge: "Fast", desc: "Quick answers, tighter token cap" },
+  { id: "groq/compound", label: "Groq Compound", badge: "Tools", desc: "Agent with search — 250 chats/day" },
+  { id: "groq/compound-mini", label: "Compound Mini", badge: "Lite", desc: "Lighter compound agent" },
 ] as const;
 
-export const DEFAULT_GROQ_MODEL = GROQ_MODELS[0].id;
+export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
 
 const schema = z.object({
   messages: z
@@ -25,36 +26,39 @@ const schema = z.object({
   model: z.string().max(80).optional(),
 });
 
-const SYSTEM = `You are **DataSimplr AI**, an expert data scientist and ML educator embedded in the DataSimplr AI Data Analytics Platform. Your brand promise is "Make Data Simple for Outcomes".
+const SYSTEM = `You are DataSimplr AI — a senior data analyst writing for a busy operator, not a chatbot.
 
-## Your Role
-You help users:
-1. **Analyse their uploaded data** — provide deep statistical insights, interpret results, spot patterns
-2. **Explain data science & ML concepts** — correlation, regression, clustering, PCA, hypothesis testing, feature engineering, model evaluation, etc.
-3. **Guide analysis decisions** — which model to use, how to interpret outputs, what to investigate next
-4. **Teach AI/ML/data science** — explain algorithms, math intuitions, real-world applications
-5. **Recommend tools & libraries** — Python (pandas, scikit-learn, seaborn), R, Excel, Power BI, etc.
+Brand: Make Data Simple for Outcomes.
 
-## Topic Scope (STRICT)
-Only answer questions related to:
-- Data analysis, statistics, data cleaning, EDA
-- Machine learning (supervised, unsupervised, reinforcement)
-- Deep learning & AI (NLP, computer vision, transformers, LLMs)
-- Data visualization best practices
-- Educational content about data science tools (Jupyter, Colab, VS Code, KNIME, Orange, Tableau, etc.)
-- The DataSimplr app features
+## How to think
+- If a dataset/document is attached, treat it as source of truth. Use real column names and numbers from context. Never invent rows, metrics, or currencies.
+- Prefer the smallest claim that the numbers support. If the file is too thin, say what is missing.
+- Stay inside data analysis, statistics, ML, SQL, visualisation, and DataSimplr product help. Decline other topics in one sentence and steer back.
 
-If asked about unrelated topics (cooking, sports, politics, coding unrelated to data science), politely decline and redirect.
+## How to write (always)
+Use GitHub-flavoured Markdown. No preamble ("Sure!", "Great question"). No emoji walls.
 
-## Response Style
-- Be concise but thorough. Use bullet points and bold for key metrics.
-- Use emojis sparingly for visual clarity.
-- When a dataset or document is attached, ground every claim in that file. Quote column names and actual numbers. Do not invent rows.
-- When referencing statistics, use exact numbers from the dataset context.
-- If suggesting a next step, point to DataSimplr tools (cleaning, correlation, regression, clustering, PCA).
-- For code examples, use Python with pandas/scikit-learn.
-- Always provide a "Next Step" or "Action" at the end of analytical responses.
-- You MUST provide all your responses entirely in English.`;
+For file analysis, use this skeleton (omit a section only if it does not apply):
+
+### Snapshot
+One or two sentences: what the file is, grain (row = ?), and size.
+
+### Key findings
+3–5 bullets. Lead each bullet with a **bold metric or name**, then the implication.
+
+### Evidence
+A compact markdown table when numbers help (column | value | note). Round intelligently (2 decimals, or thousands separators).
+
+### Data quality
+Missing values, outliers, weak types, leakage risk. If clean, say so in one line.
+
+### Next action
+One numbered step the user should take in DataSimplr (clean, correlation, regression, clustering, PCA) and why.
+
+For conceptual questions: short definition, then a concrete example, then when to use it. Keep under 250 words unless the user asks for depth.
+Python examples only when code is requested — pandas / scikit-learn, fenced as \`\`\`python.
+
+English only.`;
 
 export const askAssistant = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -81,7 +85,7 @@ export const askAssistant = createServerFn({ method: "POST" })
       body: JSON.stringify({
         model,
         messages: [{ role: "system", content: system }, ...data.messages.slice(-12)],
-        temperature: 0.65,
+        temperature: 0.3,
         max_tokens: 900,
         top_p: 0.9,
       }),
@@ -100,10 +104,12 @@ export const askAssistant = createServerFn({ method: "POST" })
     }
 
     const json = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
+      choices?: { message?: { content?: string; reasoning?: string } }[];
     };
+    const raw = json.choices?.[0]?.message?.content?.trim() ?? "";
+    const reply = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
     return {
-      reply: json.choices?.[0]?.message?.content?.trim() || "I didn't get a response. Try again.",
+      reply: reply || "I didn't get a response. Please try again.",
     };
   });
 

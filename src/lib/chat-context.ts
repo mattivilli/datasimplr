@@ -132,4 +132,4 @@ export async function prepareChatFile(file: File): Promise<ChatAttachment> {
 }
 
 export const ANALYZE_PROMPT =
-  "Analyse the uploaded file. Cover: what it contains, the most important stats, strongest relationships, data-quality issues, and the next analyses I should run. Be specific to this file.";
+  "Analyse this uploaded file. Write a Snapshot, Key findings, Evidence table, Data quality, and a single Next action in DataSimplr. Use only numbers from the file context.";
