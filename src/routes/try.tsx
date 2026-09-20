@@ -20,31 +20,31 @@ function TryPage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
-          <Link to="/" className="flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-5 lg:px-8">
+          <Link to="/" className="flex min-w-0 items-center gap-2">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary">
               <Zap className="size-4 text-primary-foreground" />
             </span>
-            <span className="font-display text-lg font-bold tracking-tight">DataSimplr</span>
+            <span className="truncate font-display text-lg font-bold tracking-tight">DataSimplr</span>
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <ThemeToggle />
-            <Link to="/auth" className="text-sm text-muted-foreground hover:text-foreground">
+            <Link to="/auth" className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline">
               Sign in to save
             </Link>
             <Link
               to="/auth"
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+              className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground sm:px-4 sm:text-sm"
             >
-              Create workspace
+              Sign in
             </Link>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-5 py-8 lg:px-8">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-5 lg:px-8">
         <div className="mb-6">
           <p className="eyebrow">No account required</p>
-          <h1 className="mt-2 font-display text-3xl font-bold">Analytics workspace</h1>
+          <h1 className="mt-2 font-display text-2xl font-bold sm:text-3xl">Analytics workspace</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
             Cleaning, descriptive stats, correlation, regression, k-means and PCA run locally in your
             browser. Sign in when you want chats and analyses saved.

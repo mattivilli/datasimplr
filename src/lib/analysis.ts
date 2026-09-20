@@ -50,6 +50,12 @@ const NULLS = new Set([
   "--",
 ]);
 
+export function tableToCsv(table: Table, maxRows = 5000): string {
+  const esc = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const rows = table.rows.slice(0, maxRows);
+  return [table.columns.map(esc).join(","), ...rows.map((r) => table.columns.map((_, i) => esc(r[i] ?? "")).join(","))].join("\n");
+}
+
 export function parseDelimited(text: string): Table {
   const lines = text
     .trim()

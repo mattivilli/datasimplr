@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 import { CopyButton } from "./copy-button";
+import { openPythonLab } from "./with-python-split";
 
 function inline(text: string): ReactNode[] {
   const parts: ReactNode[] = [];
@@ -75,7 +76,16 @@ export function MarkdownMessage({ content }: { content: string }) {
         <div key={k++} className="overflow-hidden rounded-xl border border-border bg-background">
           <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
             <span className="font-mono text-[10px] uppercase tracking-widest text-subtle">{lang || "code"}</span>
-            <CopyButton value={source} label="Copy code" copiedLabel="Copied code" />
+            <div className="flex flex-wrap gap-1.5">
+              <CopyButton value={source} label="Copy code" copiedLabel="Copied code" />
+              <button
+                type="button"
+                onClick={() => openPythonLab(source)}
+                className="inline-flex items-center rounded-lg border border-border bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:border-primary hover:text-foreground"
+              >
+                Run in lab
+              </button>
+            </div>
           </div>
           <pre className="overflow-x-auto px-3 py-2.5 font-mono text-[11px] leading-relaxed text-muted-foreground">
             {source}

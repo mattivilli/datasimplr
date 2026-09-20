@@ -10,6 +10,7 @@ import { WorkspaceShell } from "@/components/workspace/shell";
 import { MarkdownMessage } from "@/components/workspace/markdown-message";
 import { CopyButton, extractCodeBlocks } from "@/components/workspace/copy-button";
 import { Button } from "@/components/ui/button";
+import { openPythonLab, WithPythonSplit } from "@/components/workspace/with-python-split";
 
 export const Route = createFileRoute("/_authenticated/chat")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -175,11 +176,11 @@ function ChatPage() {
       title="AI Chat"
       subtitle="GPT-OSS 20B by default — cheapest Groq model that still reasons well over your files."
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <select
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            className="rounded-lg border border-border bg-muted px-2 py-1.5 text-xs"
+            className="max-w-[11rem] rounded-lg border border-border bg-muted px-2 py-1.5 text-xs sm:max-w-none"
             aria-label="Groq model"
           >
             {GROQ_MODELS.map((m) => (
@@ -194,7 +195,8 @@ function ChatPage() {
         </div>
       }
     >
-      <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
+      <WithPythonSplit csv={attachment?.csv} fileName={attachment?.name} columns={attachment?.columns}>
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
         <div className="panel h-fit p-4">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">Saved chats</p>
           <div className="mt-3 space-y-1.5">
@@ -226,7 +228,7 @@ function ChatPage() {
           </div>
         </div>
 
-        <div className="panel flex min-h-[70vh] flex-col overflow-hidden">
+        <div className="panel flex min-h-[60vh] min-w-0 flex-col overflow-hidden">
           <div className="flex-1 space-y-4 p-5">
             {!c && !pending && (
               <div className="mx-auto max-w-lg py-10 text-center">
@@ -364,6 +366,7 @@ function ChatPage() {
           </form>
         </div>
       </div>
+      </WithPythonSplit>
     </WorkspaceShell>
   );
 }
@@ -379,7 +382,18 @@ function AssistantReply({ content }: { content: string }) {
       <MarkdownMessage content={content} />
       <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3">
         <CopyButton value={content} label="Copy reply" copiedLabel="Copied reply" />
-        {code ? <CopyButton value={code} label="Copy all code" copiedLabel="Copied code" /> : null}
+        {code ? (
+          <>
+            <CopyButton value={code} label="Copy all code" copiedLabel="Copied code" />
+            <button
+              type="button"
+              onClick={() => openPythonLab(code)}
+              className="inline-flex items-center rounded-lg border border-border bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:border-primary hover:text-foreground"
+            >
+              Run in lab
+            </button>
+          </>
+        ) : null}
       </div>
     </div>
   );

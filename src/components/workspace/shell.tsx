@@ -140,13 +140,13 @@ export function WorkspaceShell({
             <h1 className="truncate font-display text-lg font-bold tracking-tight sm:text-xl">{title}</h1>
             {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex max-w-[58%] shrink-0 flex-wrap items-center justify-end gap-2 sm:max-w-none">
             {actions}
             <ThemeToggle />
           </div>
         </header>
 
-        <main className="px-5 py-7 lg:px-8">{children}</main>
+        <main className="min-w-0 px-4 py-5 sm:px-5 sm:py-7 lg:px-8">{children}</main>
       </div>
     </div>
   );

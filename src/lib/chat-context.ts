@@ -4,6 +4,7 @@ import {
   describeNumeric,
   detectTypes,
   executiveInsights,
+  tableToCsv,
   type Table,
 } from "./analysis";
 import { parseUploadedFile } from "./parse-file";
@@ -17,6 +18,8 @@ export type ChatAttachment = {
   sizeLabel: string;
   context: string;
   localSummary: string;
+  csv?: string;
+  columns?: string[];
 };
 
 function extOf(name: string) {
@@ -87,6 +90,8 @@ function datasetContext(table: Table, name: string): ChatAttachment {
     sizeLabel: `${cleaned.rows.length.toLocaleString()} rows`,
     context: context.slice(0, 14000),
     localSummary,
+    csv: tableToCsv(cleaned),
+    columns: cleaned.columns,
   };
 }
 

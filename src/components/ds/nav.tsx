@@ -30,7 +30,7 @@ export function Nav() {
         scrolled ? "border-b border-border bg-background/80 backdrop-blur-xl" : "border-b border-transparent"
       }`}
     >
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-5 lg:px-8">
         <a href="#top" className="flex items-center gap-2">
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary">
             <Zap className="size-4 text-primary-foreground" />

@@ -31,11 +31,13 @@ import {
   pca,
   previewRows,
   runTool,
+  tableToCsv,
   type FillStrategy,
   type Table,
   type ToolKey,
 } from "@/lib/analysis";
 import { parseUploadedFile } from "@/lib/parse-file";
+import { WithPythonSplit } from "@/components/workspace/with-python-split";
 
 const sample = `region,month,revenue,units,refunds
 North,Jul,412300,1820,4200
@@ -152,8 +154,9 @@ export function AnalyticsStudio({
   };
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
-      <div className="space-y-5">
+    <WithPythonSplit csv={tableToCsv(table)} fileName={fileName ?? "pasted data"} columns={table.columns}>
+    <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(220px,280px)]">
+      <div className="min-w-0 space-y-5">
         <div className="panel p-5">
           <div className="flex gap-1.5 rounded-xl border border-border bg-muted p-1">
             {(
@@ -201,7 +204,7 @@ export function AnalyticsStudio({
             />
           )}
 
-          <div className="mt-4 grid gap-3 rounded-xl border border-border bg-accent/40 px-4 py-3 sm:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-border bg-accent/40 px-4 py-3 sm:grid-cols-4">
             <Meta label="Source" value={fileName ?? "pasted data"} />
             <Meta label="Rows" value={String(table.rows.length)} />
             <Meta label="Columns" value={String(table.columns.length)} />
@@ -211,7 +214,7 @@ export function AnalyticsStudio({
 
         <div className="panel p-5">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">Cleaning</p>
-          <div className="mt-3 flex flex-wrap items-end gap-3">
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <label className="text-xs font-semibold">
               Fill missing
               <select
@@ -221,7 +224,7 @@ export function AnalyticsStudio({
                   setFill(next);
                   reclean(next, removeDups);
                 }}
-                className="mt-1 block rounded-lg border border-border bg-muted px-3 py-2 text-xs"
+                className="mt-1 block w-full rounded-lg border border-border bg-muted px-3 py-2 text-xs sm:w-auto"
               >
                 <option value="mean">Mean / mode</option>
                 <option value="median">Median</option>
@@ -240,7 +243,7 @@ export function AnalyticsStudio({
               />
               Remove duplicates
             </label>
-            <p className="ml-auto font-mono text-[10px] text-subtle">
+            <p className="font-mono text-[10px] text-subtle sm:ml-auto">
               {cleaned.report.duplicatesRemoved} dups · {cleaned.report.missingFilled} filled · {cleaned.report.rowsDropped} dropped
             </p>
           </div>
@@ -310,8 +313,11 @@ export function AnalyticsStudio({
         )}
 
         {tool === "correlation" && corr.names.length > 1 && (
-          <div className="panel p-5">
-            <div className="grid gap-1" style={{ gridTemplateColumns: `90px repeat(${corr.names.length}, minmax(48px, 1fr))` }}>
+          <div className="panel overflow-hidden p-5">
+            <div
+              className="grid min-w-[420px] gap-1 overflow-x-auto"
+              style={{ gridTemplateColumns: `90px repeat(${corr.names.length}, minmax(48px, 1fr))` }}
+            >
               <div />
               {corr.names.map((n) => (
                 <div key={n} className="truncate text-center font-mono text-[9px] text-subtle">
@@ -474,24 +480,40 @@ export function AnalyticsStudio({
         </Button>
       </div>
 
-      <div className="panel h-fit p-5">
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">Data science tools</p>
-        <div className="mt-3 space-y-2">
+      <div className="order-first min-w-0 xl:order-none">
+        <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 xl:hidden">
           {tabs.map((t) => (
             <button
               key={t.key}
               onClick={() => setTool(t.key)}
-              className={`w-full rounded-xl border px-3.5 py-2.5 text-left transition-colors ${
-                tool === t.key ? "border-primary bg-accent" : "border-border bg-muted hover:border-primary"
+              className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold ${
+                tool === t.key ? "border-primary bg-accent text-foreground" : "border-border bg-muted text-muted-foreground"
               }`}
             >
-              <p className="text-xs font-semibold">{t.name}</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">{t.blurb}</p>
+              {t.name}
             </button>
           ))}
         </div>
+        <div className="panel hidden h-fit p-5 xl:block">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">Data science tools</p>
+          <div className="mt-3 space-y-2">
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTool(t.key)}
+                className={`w-full rounded-xl border px-3.5 py-2.5 text-left transition-colors ${
+                  tool === t.key ? "border-primary bg-accent" : "border-border bg-muted hover:border-primary"
+                }`}
+              >
+                <p className="text-xs font-semibold">{t.name}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">{t.blurb}</p>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
+    </WithPythonSplit>
   );
 }
 

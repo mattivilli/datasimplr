@@ -63,7 +63,7 @@ function Dashboard() {
       title={`Welcome back, ${profile?.displayName ?? "there"}`}
       subtitle="Everything you've asked and analysed, saved to your account."
     >
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid min-w-0 gap-4 sm:grid-cols-3">
         {stats.map((s) => (
           <div key={s.label} className="panel p-5">
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">{s.label}</p>
