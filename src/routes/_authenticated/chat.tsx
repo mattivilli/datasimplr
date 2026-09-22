@@ -51,6 +51,7 @@ function ChatPage() {
   const [model, setModel] = useState<string>(DEFAULT_GROQ_MODEL);
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [readingFile, setReadingFile] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
@@ -148,6 +149,10 @@ function ChatPage() {
 
       return conversationId;
     },
+    onError: (err) => {
+      console.error("Chat send failed", err);
+      setChatError(err instanceof Error ? err.message : "Something went wrong sending that. Please try again.");
+    },
     onSettled: (conversationId) => {
       setPending(null);
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
@@ -162,6 +167,7 @@ function ChatPage() {
     const prompt = trimmed || ANALYZE_PROMPT;
     setInput("");
     setFileError(null);
+    setChatError(null);
     setPending(attachmentRef.current ? `📎 ${attachmentRef.current.name}\n\n${prompt}` : prompt);
     send.mutate(prompt);
   };
@@ -331,6 +337,12 @@ function ChatPage() {
             )}
             <div ref={bottom} />
           </div>
+
+          {chatError && (
+            <div className="border-t border-border bg-accent/40 px-4 py-2 text-xs text-destructive">
+              {chatError}
+            </div>
+          )}
 
           {(attachment || fileError || readingFile) && (
             <div className="flex items-center gap-2 border-t border-border bg-accent/40 px-4 py-2 text-xs">
