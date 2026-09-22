@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Open [https://localhost/datasimplr/](https://localhost/datasimplr/) (Apache + XAMPP proxy). Direct Vite: [http://localhost:8080/datasimplr/](http://localhost:8080/datasimplr/).
+Open [http://localhost/datasimplr/](http://localhost/datasimplr/) (Apache + XAMPP). Direct Vite: [http://localhost:8080/datasimplr/](http://localhost:8080/datasimplr/).
 
 - Public analytics workspace: `/try` (no account)
 - Saved workspace, chats and analyses: `/auth` then `/dashboard`
