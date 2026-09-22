@@ -68,7 +68,7 @@ export type PyRunResult = {
   ok: boolean;
   stdout: string;
   images: string[];
-  error?: string;
+  error?: string | undefined;
 };
 
 export async function runPython(code: string, csv?: string, fileName?: string | null): Promise<PyRunResult> {

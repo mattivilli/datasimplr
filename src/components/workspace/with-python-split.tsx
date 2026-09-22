@@ -16,9 +16,9 @@ export function WithPythonSplit({
   columns,
 }: {
   children: ReactNode;
-  csv?: string;
-  fileName?: string | null;
-  columns?: string[];
+  csv?: string | undefined;
+  fileName?: string | null | undefined;
+  columns?: string[] | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const [seed, setSeed] = useState<string | undefined>();

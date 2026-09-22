@@ -6,6 +6,10 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
+// @lovable.dev/vite-tanstack-config's types only declare an object-argument overload,
+// but its runtime (dist/index.js) explicitly supports a config-factory function too —
+// verified directly in source. This is an upstream typing gap, not a real type error.
+// @ts-expect-error - see comment above
 export default defineConfig((env) => ({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).

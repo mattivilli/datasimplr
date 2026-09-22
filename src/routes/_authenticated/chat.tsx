@@ -16,7 +16,7 @@ import { ScrollTop } from "@/components/workspace/scroll-top";
 
 export const Route = createFileRoute("/_authenticated/chat")({
   validateSearch: (search: Record<string, unknown>) => ({
-    c: typeof search.c === "string" ? search.c : undefined,
+    c: typeof search["c"] === "string" ? search["c"] : undefined,
   }),
   head: () => ({
     meta: [
@@ -200,7 +200,7 @@ function ChatPage() {
     await supabase.from("conversations").delete().eq("id", id);
     queryClient.invalidateQueries({ queryKey: ["conversations"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    if (c === id) await navigate({ search: {} });
+    if (c === id) await navigate({ search: { c: undefined } });
   };
 
   return (
@@ -235,7 +235,7 @@ function ChatPage() {
           </button>
           {chatsOpen ? (
         <div className="panel flex h-full max-h-[calc(100dvh-8.5rem)] flex-col p-3">
-          <Button className="w-full shrink-0" size="sm" onClick={() => navigate({ search: {} })}>
+          <Button className="w-full shrink-0" size="sm" onClick={() => navigate({ search: { c: undefined } })}>
             <Plus className="mr-1.5 size-4" /> New chat
           </Button>
           <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">Saved chats</p>

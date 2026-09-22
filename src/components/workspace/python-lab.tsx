@@ -15,10 +15,10 @@ export function PythonLab({
   columns,
   seedCode,
 }: {
-  csv?: string;
-  fileName?: string | null;
-  columns?: string[];
-  seedCode?: string;
+  csv?: string | undefined;
+  fileName?: string | null | undefined;
+  columns?: string[] | undefined;
+  seedCode?: string | undefined;
 }) {
   const fix = useServerFn(fixPython);
   const fileRef = useRef<HTMLInputElement>(null);

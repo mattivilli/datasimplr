@@ -42,7 +42,7 @@ export function WorkspaceShell({
   children,
 }: {
   title: string;
-  subtitle?: string;
+  subtitle?: string | undefined;
   actions?: ReactNode;
   children: ReactNode;
 }) {

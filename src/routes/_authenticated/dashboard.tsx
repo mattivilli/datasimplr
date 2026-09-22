@@ -93,7 +93,7 @@ function Dashboard() {
         <div className="panel p-5">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-base font-semibold">Recent chats</h2>
-            <Link to="/chat" className="text-xs text-primary hover:underline">
+            <Link to="/chat" search={{ c: undefined }} className="text-xs text-primary hover:underline">
               View all
             </Link>
           </div>

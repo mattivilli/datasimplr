@@ -29,7 +29,9 @@ function emit(d: StoredDataset | null) {
 
 export function subscribeDataset(fn: (d: StoredDataset | null) => void) {
   listeners.add(fn);
-  return () => listeners.delete(fn);
+  return () => {
+    listeners.delete(fn);
+  };
 }
 
 export async function saveActiveDataset(d: Omit<StoredDataset, "savedAt">) {

@@ -73,8 +73,10 @@ export const askAssistant = createServerFn({ method: "POST" })
       };
     }
 
-    const allowed = new Set(GROQ_MODELS.map((m) => m.id));
-    const model = data.model && allowed.has(data.model) ? data.model : DEFAULT_GROQ_MODEL;
+    const allowed = new Set<string>(GROQ_MODELS.map((m) => m.id));
+    const model = (
+      data.model && allowed.has(data.model) ? data.model : DEFAULT_GROQ_MODEL
+    ) as (typeof GROQ_MODELS)[number]["id"];
     const system = data.context ? `${SYSTEM}\n\n## Current Dataset Context\n${data.context}` : SYSTEM;
 
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
