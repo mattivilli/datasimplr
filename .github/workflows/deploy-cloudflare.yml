@@ -1,0 +1,54 @@
+name: Deploy to Cloudflare Workers
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config .output/server/wrangler.json
+
+      - name: Smoke check
+        run: |
+          set -euo pipefail
+          for path in / /try /auth /dashboard /chat; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://mattivilli-datasimplr.mattivilli.workers.dev${path}")
+            echo "${path} -> HTTP ${code}"
+            if [ "$code" != "200" ] && [ "$code" != "307" ] && [ "$code" != "302" ]; then
+              echo "::error::${path} returned ${code}"
+              exit 1
+            fi
+          done
