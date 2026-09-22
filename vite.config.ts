@@ -6,13 +6,15 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
-export default defineConfig({
+export default defineConfig((env) => ({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
     server: { entry: "server" },
   },
   vite: {
-    base: "/datasimplr/",
+    // Local dev sits behind the XAMPP Apache proxy at /datasimplr/ (see datasimplr-proxy.conf).
+    // Production builds get their own dedicated domain (Cloudflare Workers), so they serve from root.
+    base: env.command === "serve" ? "/datasimplr/" : "/",
   },
-});
+}));
