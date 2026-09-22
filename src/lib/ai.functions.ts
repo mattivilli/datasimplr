@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { getServerEnv } from "@/lib/server-env";
 
 export const GROQ_MODELS = [
   { id: "openai/gpt-oss-20b", label: "GPT-OSS 20B", badge: "Economy", desc: "Best cost / speed on Groq free" },
@@ -64,7 +65,7 @@ export const askAssistant = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => schema.parse(data))
   .handler(async ({ data }) => {
-    const apiKey = process.env["GROQ_API_KEY"];
+    const apiKey = await getServerEnv("GROQ_API_KEY");
     if (!apiKey || !apiKey.startsWith("gsk_")) {
       return {
         reply:
@@ -124,7 +125,7 @@ export const fixPython = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => fixSchema.parse(data))
   .handler(async ({ data }) => {
-    const apiKey = process.env["GROQ_API_KEY"];
+    const apiKey = await getServerEnv("GROQ_API_KEY");
     if (!apiKey || !apiKey.startsWith("gsk_")) {
       return { reply: "Groq is not configured. Add GROQ_API_KEY in .env.local.", code: "" };
     }
