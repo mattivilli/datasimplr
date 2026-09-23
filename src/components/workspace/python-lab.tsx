@@ -9,6 +9,13 @@ import { tableToCsv } from "@/lib/analysis";
 import { fixPython } from "@/lib/ai.functions";
 import { extractCodeBlocks } from "./copy-button";
 
+// Whether a snippet actually touches the uploaded dataset — simple practice
+// programs (a palindrome checker, a sorting demo, ...) don't, and shouldn't be
+// blocked on or nagged about a file that was never needed.
+function codeNeedsDataset(code: string): boolean {
+  return /\bdf\b|\bDATA_PATH\b|read_csv|read_excel|read_table/.test(code);
+}
+
 export function PythonLab({
   csv,
   fileName,
@@ -115,7 +122,7 @@ export function PythonLab({
           setBoundCols(stored.columns);
         }
       }
-      if (!data.trim()) {
+      if (!data.trim() && codeNeedsDataset(code)) {
         setNeedUpload(true);
         setRan(true);
         setError("No uploaded file is bound to df. Upload the dataset again in this lab or in Upload & Analyze.");
@@ -207,7 +214,7 @@ export function PythonLab({
       />
 
       <div className="shrink-0 border-t border-border px-3 py-2">
-        {needUpload && (
+        {needUpload && codeNeedsDataset(code) && (
           <p className="mb-2 text-xs text-amber-500">
             The dataset is not in memory. Upload the file again here — it is cached on this device for the lab.
           </p>

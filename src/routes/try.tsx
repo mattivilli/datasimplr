@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Zap } from "lucide-react";
 import { ThemeToggle } from "@/components/ds/theme-toggle";
+import { LogoMark } from "@/components/ds/logo";
 import { AnalyticsStudio } from "@/components/workspace/analytics-studio";
 
 export const Route = createFileRoute("/try")({
@@ -22,9 +22,7 @@ function TryPage() {
       <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-5 lg:px-8">
           <Link to="/" className="flex min-w-0 items-center gap-2">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary">
-              <Zap className="size-4 text-primary-foreground" />
-            </span>
+            <LogoMark />
             <span className="truncate font-display text-lg font-bold tracking-tight">DataSimplr</span>
           </Link>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">

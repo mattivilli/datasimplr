@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Menu, X, Zap } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
+import { LogoMark } from "./logo";
 
 const links = [
   { label: "Product", href: "#product" },
@@ -32,9 +33,7 @@ export function Nav() {
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-5 lg:px-8">
         <a href="#top" className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary">
-            <Zap className="size-4 text-primary-foreground" />
-          </span>
+          <LogoMark />
           <span className="font-display text-lg font-bold tracking-tight">DataSimplr</span>
         </a>
 

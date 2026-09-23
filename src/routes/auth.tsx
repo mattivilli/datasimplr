@@ -1,7 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Loader2, MailCheck, Zap } from "lucide-react";
+import { Loader2, MailCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { LogoMark } from "@/components/ds/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -81,9 +82,7 @@ function AuthPage() {
       <div className="absolute inset-0 grid-bg opacity-50" aria-hidden />
       <div className="relative w-full max-w-md">
         <Link to="/" className="mb-8 flex items-center justify-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary">
-            <Zap className="size-4 text-primary-foreground" />
-          </span>
+          <LogoMark />
           <span className="font-display text-lg font-bold tracking-tight">DataSimplr</span>
         </Link>
 

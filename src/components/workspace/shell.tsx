@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, ChevronLeft, ChevronRight, FileText, HelpCircle, LogOut, Menu, MessageSquare, Settings, Upload, X, Zap } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, FileText, HelpCircle, LogOut, Menu, MessageSquare, Settings, Upload, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ds/theme-toggle";
+import { LogoMark } from "@/components/ds/logo";
 import { ScrollTop } from "@/components/workspace/scroll-top";
 
 const nav = [
@@ -79,9 +80,7 @@ export function WorkspaceShell({
   const sidebar = (
     <div className="flex h-full flex-col">
       <Link to="/dashboard" className={`flex items-center gap-2 py-5 ${collapsed ? "justify-center px-2" : "px-5"}`}>
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary">
-          <Zap className="size-4 text-primary-foreground" />
-        </span>
+        <LogoMark />
         {!collapsed && <span className="font-display text-base font-bold tracking-tight">DataSimplr</span>}
       </Link>
 

@@ -19,6 +19,7 @@ import {
   Upload,
   Wallet,
 } from "lucide-react";
+import { LogoMark } from "./logo";
 
 function SectionHead({
   eyebrow,
@@ -470,7 +471,9 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-5 lg:px-8">
         <div className="flex flex-col gap-10 lg:flex-row lg:justify-between">
           <div className="max-w-sm">
-            <p className="font-display text-lg font-bold">⚡ DataSimplr</p>
+            <p className="flex items-center gap-2 font-display text-lg font-bold">
+              <LogoMark className="size-6" /> DataSimplr
+            </p>
             <p className="mt-3 text-sm text-muted-foreground">Make Data Simple for Outcomes.</p>
           </div>
           <div className="grid grid-cols-2 gap-10 sm:grid-cols-3">
