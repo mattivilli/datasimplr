@@ -27,7 +27,25 @@ function sheetToTable(sheet: XLSX.WorkSheet): Table {
   return tableFromObjects(json);
 }
 
-export async function parseUploadedFile(file: File): Promise<{ table: Table; sourceName: string }> {
+function isSpreadsheet(file: File): boolean {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return ext === "xlsx" || ext === "xls";
+}
+
+// Peek at an Excel file's sheet names without fully parsing it, so the caller
+// can offer a picker when there's more than one. Returns null for non-Excel
+// files (nothing to pick from).
+export async function getSheetNames(file: File): Promise<string[] | null> {
+  if (!isSpreadsheet(file)) return null;
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array", bookSheets: true });
+  return workbook.SheetNames;
+}
+
+export async function parseUploadedFile(
+  file: File,
+  sheetName?: string,
+): Promise<{ table: Table; sourceName: string; sheetName?: string }> {
   if (file.size > MAX_BYTES) {
     throw new Error("That file is larger than 50 MB. Try a smaller extract.");
   }
@@ -35,12 +53,12 @@ export async function parseUploadedFile(file: File): Promise<{ table: Table; sou
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   const sourceName = file.name;
 
-  if (["xlsx", "xls"].includes(ext)) {
+  if (isSpreadsheet(file)) {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
-    const first = workbook.SheetNames[0];
-    if (!first) throw new Error("That spreadsheet has no worksheets.");
-    return { table: sheetToTable(workbook.Sheets[first]!), sourceName };
+    const chosen = sheetName && workbook.SheetNames.includes(sheetName) ? sheetName : workbook.SheetNames[0];
+    if (!chosen) throw new Error("That spreadsheet has no worksheets.");
+    return { table: sheetToTable(workbook.Sheets[chosen]!), sourceName, sheetName: chosen };
   }
 
   const text = await file.text();

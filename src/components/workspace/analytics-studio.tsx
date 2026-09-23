@@ -36,7 +36,7 @@ import {
   type Table,
   type ToolKey,
 } from "@/lib/analysis";
-import { parseUploadedFile } from "@/lib/parse-file";
+import { getSheetNames, parseUploadedFile } from "@/lib/parse-file";
 import { WithPythonSplit } from "@/components/workspace/with-python-split";
 import { saveActiveDataset } from "@/lib/dataset-store";
 
@@ -79,6 +79,8 @@ export function AnalyticsStudio({
   const [tool, setTool] = useState<ToolKey>("profile");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [sheetOptions, setSheetOptions] = useState<string[] | null>(null);
   const [k, setK] = useState(3);
   const [xCol, setXCol] = useState("");
   const [yCol, setYCol] = useState("");
@@ -116,10 +118,30 @@ export function AnalyticsStudio({
     if (!file) return;
     setError(null);
     try {
-      const parsed = await parseUploadedFile(file);
+      const sheets = await getSheetNames(file);
+      if (sheets && sheets.length > 1) {
+        setPendingFile(file);
+        setSheetOptions(sheets);
+        return;
+      }
+      const parsed = await parseUploadedFile(file, sheets?.[0]);
       applyTable(parsed.table, parsed.sourceName);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read that file.");
+    }
+  };
+
+  const chooseSheet = async (name: string) => {
+    if (!pendingFile) return;
+    setError(null);
+    try {
+      const parsed = await parseUploadedFile(pendingFile, name);
+      applyTable(parsed.table, `${parsed.sourceName} — ${name}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not read that sheet.");
+    } finally {
+      setPendingFile(null);
+      setSheetOptions(null);
     }
   };
 
@@ -191,19 +213,48 @@ export function AnalyticsStudio({
           </div>
 
           {mode === "upload" ? (
-            <label className="mt-4 block cursor-pointer rounded-xl border border-dashed border-border bg-muted px-5 py-10 text-center transition-colors hover:border-primary">
-              <Upload className="mx-auto size-5 text-primary" />
-              <p className="mt-3 text-sm font-semibold">Drop Excel, CSV, TSV or JSON</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                .xlsx, .xls, .csv, .tsv, .json — up to 50 MB. Parsed in your browser.
-              </p>
-              <input
-                type="file"
-                accept=".csv,.tsv,.txt,.json,.xlsx,.xls"
-                className="hidden"
-                onChange={(e) => onFile(e.target.files?.[0] ?? null)}
-              />
-            </label>
+            sheetOptions ? (
+              <div className="mt-4 rounded-xl border border-border bg-muted p-5">
+                <p className="text-sm font-semibold">{pendingFile?.name} has {sheetOptions.length} sheets</p>
+                <p className="mt-1 text-xs text-muted-foreground">Pick the one to analyze.</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {sheetOptions.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => void chooseSheet(name)}
+                      className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:border-primary hover:text-primary"
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingFile(null);
+                    setSheetOptions(null);
+                  }}
+                  className="mt-3 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Cancel and choose a different file
+                </button>
+              </div>
+            ) : (
+              <label className="mt-4 block cursor-pointer rounded-xl border border-dashed border-border bg-muted px-5 py-10 text-center transition-colors hover:border-primary">
+                <Upload className="mx-auto size-5 text-primary" />
+                <p className="mt-3 text-sm font-semibold">Drop Excel, CSV, TSV or JSON</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  .xlsx, .xls, .csv, .tsv, .json — up to 50 MB. Parsed in your browser.
+                </p>
+                <input
+                  type="file"
+                  accept=".csv,.tsv,.txt,.json,.xlsx,.xls"
+                  className="hidden"
+                  onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+            )
           ) : (
             <textarea
               value={text}
