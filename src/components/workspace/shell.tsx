@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, ChevronLeft, ChevronRight, FileText, LogOut, Menu, MessageSquare, Settings, Upload, X, Zap } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, FileText, HelpCircle, LogOut, Menu, MessageSquare, Settings, Upload, X, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ds/theme-toggle";
 import { ScrollTop } from "@/components/workspace/scroll-top";
@@ -12,6 +12,7 @@ const nav = [
   { to: "/analyze", label: "Upload & Analyze", icon: Upload },
   { to: "/analyses", label: "Past Analyses", icon: FileText },
   { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/help", label: "Help", icon: HelpCircle },
 ] as const;
 
 export function useProfile() {

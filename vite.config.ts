@@ -6,11 +6,13 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
-// The app always runs at basepath "/" — in local dev, XAMPP's Apache reverse proxy
-// (datasimplr-proxy.conf) strips the /datasimplr prefix before forwarding to this
-// dev server, so the app never needs to know about it. This avoids TanStack Start's
-// dev-basepath-alignment edge cases entirely (a non-root basepath here previously
-// broke all page routing under `vite dev`, independent of how it was configured).
+// The app always runs at basepath "/" — a non-root basepath here triggers a TanStack
+// Start dev-mode bug (breaks all page routing under `vite dev`). Reverse-proxying it
+// under a sub-path (e.g. XAMPP at localhost/datasimplr/) doesn't work around this
+// either: the server-rendered page loads, but client-side hydration reads the
+// browser's real URL (which still has the proxy's prefix) and crashes trying to
+// match a route the root-basepath router doesn't know about. Run `npm run dev` and
+// open http://localhost:8080/ directly — no reverse proxy in front of it.
 export default defineConfig({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).

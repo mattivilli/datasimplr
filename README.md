@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost/datasimplr/](http://localhost/datasimplr/) (Apache + XAMPP). Direct Vite: [http://localhost:8080/datasimplr/](http://localhost:8080/datasimplr/).
+Open [http://localhost:8080/](http://localhost:8080/). (Runs standalone — no XAMPP/Apache; see `vite.config.ts` for why.)
 
 - Public analytics workspace: `/try` (no account)
 - Saved workspace, chats and analyses: `/auth` then `/dashboard`

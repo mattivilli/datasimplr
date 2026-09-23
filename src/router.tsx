@@ -8,7 +8,7 @@ export const getRouter = () => {
   const router = createRouter({
     routeTree,
     context: { queryClient },
-    // Always root — see vite.config.ts for why (Apache strips /datasimplr in dev).
+    // Always root — see vite.config.ts for why.
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
   });
