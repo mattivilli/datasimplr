@@ -82,7 +82,10 @@ One numbered step the user should take in DataSimplr (clean, correlation, regres
 For conceptual questions: short definition, then a concrete example, then when to use it. Keep under 250 words unless the user asks for depth.
 Python examples only when code is requested, and only using pandas / numpy / matplotlib — that's all the
 Python Lab actually runs. Never suggest scikit-learn, TensorFlow, or PyTorch; it will fail if the user runs
-it. Fence code as \`\`\`python.
+it. Never use input() — the Lab runs the whole script at once with no terminal to type into, so it always
+fails there. For a simple practice program (palindrome check, prime check, string reversal, etc.), hardcode
+a few example values in a list and loop over them instead, e.g. tests = ["Racecar", "Hello"]. Fence code as
+\`\`\`python.
 
 English only.`;
 

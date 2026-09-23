@@ -30,10 +30,22 @@ export const BLOCKED_LIBS: { re: RegExp; label: string; hint: string }[] = [
   { re: /\b(plotly|bokeh|altair)\b/i, label: "Interactive viz libs", hint: "Only matplotlib figures render in Preview. Use plt.bar / plt.scatter / df.plot." },
   { re: /\b(requests|httpx|urllib)\b/i, label: "Network calls", hint: "This lab has no internet. The uploaded file is already in df." },
   { re: /\b(psycopg|sqlalchemy|sqlite3)\b/i, label: "Databases", hint: "Load data with the Upload panel, then chart df." },
+  {
+    re: /\binput\s*\(/,
+    label: "input()",
+    hint: "This lab runs the whole script at once with no terminal to type into, so input() always fails. Use a fixed value or list of test values instead, e.g. tests = [\"Racecar\", \"Hello\"] then loop over them.",
+  },
 ];
 
 export function findBlocked(code: string) {
   return BLOCKED_LIBS.filter((b) => b.re.test(code));
+}
+
+// Whether a snippet actually touches the uploaded dataset — simple practice
+// programs (a palindrome checker, a prime check, ...) don't, and shouldn't be
+// nagged about a file that was never needed or steered toward chart suggestions.
+export function codeNeedsDataset(code: string): boolean {
+  return /\bdf\b|\bDATA_PATH\b|read_csv|read_excel|read_table/.test(code);
 }
 
 async function loadScript() {
@@ -219,7 +231,7 @@ fig.tight_layout()
 `;
 }
 
-export function nextSteps(ok: boolean, blocked: boolean): string[] {
+export function nextSteps(ok: boolean, blocked: boolean, usesDataset = true): string[] {
   if (blocked) {
     return [
       "Keep the snippet to pandas + matplotlib — those are the libraries this lab runs.",
@@ -228,12 +240,20 @@ export function nextSteps(ok: boolean, blocked: boolean): string[] {
       "Ask AI Chat to rewrite the snippet for this sandbox.",
     ];
   }
-  if (ok) {
+  if (ok && usesDataset) {
     return [
       "Try a bar chart of a category column, or a histogram of a numeric field.",
       "Open Correlation in Upload & Analyze to confirm the relationship you just plotted.",
       "Ask AI Chat to interpret this chart in plain language.",
       "Save the analysis from Upload & Analyze if you want it in Past Analyses.",
+    ];
+  }
+  if (ok) {
+    return [
+      "Keep practicing: check if a given string is the same reversed.",
+      "Try one that checks if a given number is prime.",
+      "Or: count vowels in a sentence, or find the largest of three numbers.",
+      "Want to try one of these? Ask AI Chat and click \"Run in lab\" on the result.",
     ];
   }
   return [

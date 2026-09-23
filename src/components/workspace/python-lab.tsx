@@ -2,19 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, Loader2, Play, Sparkles, Terminal, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { findBlocked, nextSteps, runPython, starterPython } from "@/lib/pyodide-runtime";
+import { codeNeedsDataset, findBlocked, nextSteps, runPython, starterPython } from "@/lib/pyodide-runtime";
 import { loadActiveDataset, saveActiveDataset, subscribeDataset } from "@/lib/dataset-store";
 import { parseUploadedFile } from "@/lib/parse-file";
 import { tableToCsv } from "@/lib/analysis";
 import { fixPython } from "@/lib/ai.functions";
 import { extractCodeBlocks } from "./copy-button";
-
-// Whether a snippet actually touches the uploaded dataset — simple practice
-// programs (a palindrome checker, a sorting demo, ...) don't, and shouldn't be
-// blocked on or nagged about a file that was never needed.
-function codeNeedsDataset(code: string): boolean {
-  return /\bdf\b|\bDATA_PATH\b|read_csv|read_excel|read_table/.test(code);
-}
 
 export function PythonLab({
   csv,
@@ -79,7 +72,7 @@ export function PythonLab({
   }), []);
 
   const warnings = findBlocked(code);
-  const steps = ran ? nextSteps(!error && !blocked, blocked) : [];
+  const steps = ran ? nextSteps(!error && !blocked, blocked, codeNeedsDataset(code)) : [];
 
   const onReupload = async (file: File | null) => {
     if (!file) return;
