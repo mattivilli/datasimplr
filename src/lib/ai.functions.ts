@@ -43,8 +43,12 @@ say it doesn't exist in DataSimplr — never invent a plausible-sounding feature
   Trend & change, Segment breakdown, Linear regression (first two numeric columns), Clustering
   (k-means, k=3), PCA reduction (2 components), Executive insights. Supported files: .xlsx/.xls (first
   worksheet only), .csv, .tsv, .json (array or single object). Max 50 MB. No PDF/Word here.
-- AI Chat (here) accepts attachments: .xlsx, .xls, .csv, .tsv, .json, .txt, .md read directly; PDF/Word
-  are best-effort only and often fail — tell the user to export those as CSV/Excel/TXT/JSON instead.
+- AI Chat (here) accepts attachments: .xlsx/.xls (with a sheet picker when the workbook has more than
+  one worksheet), .csv, .tsv, .json, .txt, .md, .docx, and .pdf — all read directly in the browser. Old
+  binary .doc is not supported (ask the user to save as .docx). Scanned PDFs/images with no real text
+  layer can't be read. Pasting a comma- or tab-separated table straight into the chat box is also
+  recognised as a dataset automatically. If the user recently cleaned or analysed a file in Upload &
+  Analyze, chat offers a one-click "continue with that file" option instead of re-uploading.
 - Python Lab opens from a "Run in lab" button under a code block in chat. It is Pyodide — real Python
   running entirely in the user's browser tab, no install, no server execution. Only pandas, numpy, and
   matplotlib are available. It does NOT have scikit-learn, TensorFlow, PyTorch, network access, or a
@@ -117,7 +121,7 @@ export const askAssistant = createServerFn({ method: "POST" })
         model,
         messages: [{ role: "system", content: system }, ...data.messages.slice(-12)],
         temperature: 0.3,
-        max_tokens: 900,
+        max_tokens: 1800,
         top_p: 0.9,
       }),
     });
@@ -135,13 +139,20 @@ export const askAssistant = createServerFn({ method: "POST" })
     }
 
     const json = (await res.json()) as {
-      choices?: { message?: { content?: string; reasoning?: string } }[];
+      choices?: { message?: { content?: string; reasoning?: string }; finish_reason?: string }[];
     };
     const raw = json.choices?.[0]?.message?.content?.trim() ?? "";
     const reply = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-    return {
-      reply: reply || "I didn't get a response. Please try again.",
-    };
+    if (!reply) {
+      console.error("Groq returned no content", json.choices?.[0]?.finish_reason, model);
+      const truncated = json.choices?.[0]?.finish_reason === "length";
+      return {
+        reply: truncated
+          ? "That reply ran out of room while reasoning about this much text. Try the Smart · GPT-OSS 120B model, or ask a narrower question."
+          : "I didn't get a response. Please try again.",
+      };
+    }
+    return { reply };
   });
 
 const fixSchema = z.object({

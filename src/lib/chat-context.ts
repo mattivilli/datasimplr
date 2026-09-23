@@ -4,10 +4,11 @@ import {
   describeNumeric,
   detectTypes,
   executiveInsights,
+  parseDelimited,
   tableToCsv,
   type Table,
 } from "./analysis";
-import { parseUploadedFile } from "./parse-file";
+import { getSheetNames, parseUploadedFile } from "./parse-file";
 
 const TABULAR = new Set(["xlsx", "xls", "csv", "tsv", "json"]);
 const TEXT = new Set(["txt", "md", "csv", "tsv", "json"]);
@@ -26,6 +27,14 @@ function extOf(name: string) {
   return name.split(".").pop()?.toLowerCase() ?? "";
 }
 
+// Server schema caps `context` at 16000 chars — leave headroom for the
+// "Document file: <name>" prefix instead of truncating the body alone.
+const MAX_CONTEXT = 15800;
+
+function documentContext(name: string, body: string): string {
+  return `Document file: ${name}\n\n${body}`.slice(0, MAX_CONTEXT);
+}
+
 function sampleTable(table: Table, limit = 5) {
   const cols = table.columns.slice(0, 8);
   const header = cols.join(" | ");
@@ -33,7 +42,7 @@ function sampleTable(table: Table, limit = 5) {
   return [header, ...rows].join("\n");
 }
 
-function datasetContext(table: Table, name: string): ChatAttachment {
+export function datasetContext(table: Table, name: string): ChatAttachment {
   const cleaned = cleanTable(table, { fill: "mean", removeDuplicates: true }).table;
   const types = detectTypes(cleaned);
   const numeric = cleaned.columns.filter((c) => types[c] === "numeric");
@@ -95,30 +104,78 @@ function datasetContext(table: Table, name: string): ChatAttachment {
   };
 }
 
-export async function prepareChatFile(file: File): Promise<ChatAttachment> {
+// Sheet names for a multi-sheet Excel attachment, or null if the file isn't
+// a spreadsheet \u2014 lets the caller offer a picker before parsing it.
+export async function chatFileSheetNames(file: File): Promise<string[] | null> {
+  return getSheetNames(file);
+}
+
+async function extractDocx(file: File): Promise<string> {
+  const mammoth = await import("mammoth");
+  const buffer = await file.arrayBuffer();
+  const { value } = await mammoth.extractRawText({ arrayBuffer: buffer });
+  return value.trim();
+}
+
+const PDFJS_CDN = "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/";
+
+async function extractPdf(file: File): Promise<string> {
+  const pdfjs = await import("pdfjs-dist");
+  const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+  const buffer = await file.arrayBuffer();
+  const doc = await pdfjs.getDocument({
+    data: buffer,
+    cMapUrl: `${PDFJS_CDN}cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `${PDFJS_CDN}standard_fonts/`,
+  }).promise;
+  const pages: string[] = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    const content = await page.getTextContent();
+    pages.push(content.items.map((it) => ("str" in it ? it.str : "")).join(" "));
+  }
+  return pages.join("\n\n").trim();
+}
+
+export async function prepareChatFile(file: File, sheetName?: string): Promise<ChatAttachment> {
   const ext = extOf(file.name);
   const sizeLabel = file.size > 1024 * 1024 ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1024))} KB`;
 
-  if (["pdf", "docx", "doc"].includes(ext)) {
-    const text = await file.text().catch(() => "");
-    const printable = text.replace(/[^\x09\x0a\x0d\x20-\x7e\u00a0-\u024f]/g, " ").replace(/\s+/g, " ").trim();
-    if (printable.length < 80) {
-      throw new Error("I can't read that PDF/Word binary here. Export it as CSV, Excel, TXT or JSON and attach that.");
+  if (ext === "docx" || ext === "pdf") {
+    let text = "";
+    try {
+      text = ext === "docx" ? await extractDocx(file) : await extractPdf(file);
+    } catch (e) {
+      console.error(`Failed to extract text from .${ext}`, e);
+    }
+    if (text.length < 20) {
+      throw new Error(
+        ext === "docx"
+          ? "That .docx has no extractable text (it may be scanned images). Export it as PDF, TXT or CSV instead."
+          : "That PDF has no extractable text (it's likely scanned images). Export it as TXT, DOCX or CSV instead.",
+      );
     }
     return {
       name: file.name,
       kind: "document",
       sizeLabel,
-      context: `Document file: ${file.name}\n\n${printable.slice(0, 12000)}`,
+      context: documentContext(file.name, text),
       localSummary: `Loaded document **${file.name}** (${sizeLabel}). Ask me to summarise, extract metrics, or turn it into actions.`,
     };
   }
 
+  if (ext === "doc") {
+    throw new Error("The old .doc format isn't supported. Save it as .docx (or export as PDF/CSV/TXT) and attach that.");
+  }
+
   if (TABULAR.has(ext) || TEXT.has(ext)) {
     try {
-      const parsed = await parseUploadedFile(file);
+      const parsed = await parseUploadedFile(file, sheetName);
       if (parsed.table.columns.length >= 2 && parsed.table.rows.length >= 2) {
-        return datasetContext(parsed.table, parsed.sourceName);
+        const label = parsed.sheetName ? `${parsed.sourceName} \u2014 ${parsed.sheetName}` : parsed.sourceName;
+        return datasetContext(parsed.table, label);
       }
     } catch {
       // fall through to raw text
@@ -131,9 +188,22 @@ export async function prepareChatFile(file: File): Promise<ChatAttachment> {
     name: file.name,
     kind: "document",
     sizeLabel,
-    context: `Document file: ${file.name}\n\n${raw.slice(0, 12000)}`,
+    context: documentContext(file.name, raw),
     localSummary: `Loaded **${file.name}** (${sizeLabel}). I can summarise it and pull out the findings that matter.`,
   };
+}
+
+// Recognise a table pasted directly into the chat box (CSV/TSV-shaped text)
+// so it gets the same stats/correlations treatment as an uploaded file.
+export function detectPastedTable(text: string): Table | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const lines = trimmed.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length < 3 || !/[,\t]/.test(lines[0]!)) return null;
+  const table = parseDelimited(trimmed);
+  if (table.columns.length < 2 || table.rows.length < 2) return null;
+  const consistent = table.rows.slice(0, 20).every((r) => r.length === table.columns.length);
+  return consistent ? table : null;
 }
 
 export const ANALYZE_PROMPT =

@@ -5,8 +5,16 @@ import { useServerFn } from "@tanstack/react-start";
 import { ChevronLeft, ChevronRight, Loader2, Paperclip, Plus, Send, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { askAssistant, DEFAULT_GROQ_MODEL, GROQ_MODELS } from "@/lib/ai.functions";
-import { ANALYZE_PROMPT, prepareChatFile, type ChatAttachment } from "@/lib/chat-context";
-import { saveActiveDataset } from "@/lib/dataset-store";
+import {
+  ANALYZE_PROMPT,
+  chatFileSheetNames,
+  datasetContext,
+  detectPastedTable,
+  prepareChatFile,
+  type ChatAttachment,
+} from "@/lib/chat-context";
+import { parseDelimited } from "@/lib/analysis";
+import { loadActiveDataset, saveActiveDataset, type StoredDataset } from "@/lib/dataset-store";
 import { WorkspaceShell } from "@/components/workspace/shell";
 import { MarkdownMessage } from "@/components/workspace/markdown-message";
 import { CopyButton, extractCodeBlocks } from "@/components/workspace/copy-button";
@@ -53,12 +61,19 @@ function ChatPage() {
   const [fileError, setFileError] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
   const [readingFile, setReadingFile] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [sheetOptions, setSheetOptions] = useState<string[] | null>(null);
+  const [resumable, setResumable] = useState<StoredDataset | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const attachmentRef = useRef<ChatAttachment | null>(null);
   const [chatsOpen, setChatsOpen] = useState(true);
   attachmentRef.current = attachment;
+
+  useEffect(() => {
+    void loadActiveDataset().then(setResumable);
+  }, []);
 
   const { data: conversations } = useQuery({
     queryKey: ["conversations"],
@@ -164,6 +179,16 @@ function ChatPage() {
   const submit = (text: string) => {
     const trimmed = text.trim();
     if ((!trimmed && !attachmentRef.current) || send.isPending) return;
+    if (!attachmentRef.current && trimmed) {
+      const table = detectPastedTable(trimmed);
+      if (table) {
+        const built = datasetContext(table, "Pasted data");
+        setAttachment(built);
+        attachmentRef.current = built;
+        setResumable(null);
+        if (built.csv) void saveActiveDataset({ csv: built.csv, fileName: built.name, columns: built.columns ?? [] });
+      }
+    }
     const prompt = trimmed || ANALYZE_PROMPT;
     setInput("");
     setFileError(null);
@@ -172,14 +197,13 @@ function ChatPage() {
     send.mutate(prompt);
   };
 
-  const onPickFile = async (file: File | null) => {
-    if (!file || send.isPending) return;
-    setFileError(null);
+  const loadChatFile = async (file: File, sheetName?: string) => {
     setReadingFile(true);
     try {
-      const prepared = await prepareChatFile(file);
+      const prepared = await prepareChatFile(file, sheetName);
       setAttachment(prepared);
       attachmentRef.current = prepared;
+      setResumable(null);
       if (prepared.csv) {
         await saveActiveDataset({
           csv: prepared.csv,
@@ -193,6 +217,53 @@ function ChatPage() {
     } finally {
       setReadingFile(false);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const onPickFile = async (file: File | null) => {
+    if (!file || send.isPending) return;
+    setFileError(null);
+    setReadingFile(true);
+    try {
+      const sheets = await chatFileSheetNames(file);
+      if (sheets && sheets.length > 1) {
+        setPendingFile(file);
+        setSheetOptions(sheets);
+        setReadingFile(false);
+        return;
+      }
+      await loadChatFile(file, sheets?.[0]);
+    } catch (e) {
+      setFileError(e instanceof Error ? e.message : "Could not read that file.");
+      setReadingFile(false);
+    }
+  };
+
+  const chooseSheet = async (name: string) => {
+    if (!pendingFile) return;
+    const file = pendingFile;
+    setPendingFile(null);
+    setSheetOptions(null);
+    await loadChatFile(file, name);
+  };
+
+  const cancelSheetPick = () => {
+    setPendingFile(null);
+    setSheetOptions(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const resumeDataset = async () => {
+    if (!resumable) return;
+    setReadingFile(true);
+    try {
+      const table = parseDelimited(resumable.csv);
+      const built = datasetContext(table, resumable.fileName);
+      setAttachment(built);
+      attachmentRef.current = built;
+      setResumable(null);
+    } finally {
+      setReadingFile(false);
     }
   };
 
@@ -341,6 +412,51 @@ function ChatPage() {
           {chatError && (
             <div className="border-t border-border bg-accent/40 px-4 py-2 text-xs text-destructive">
               {chatError}
+            </div>
+          )}
+
+          {sheetOptions && pendingFile && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-border bg-accent/40 px-4 py-2 text-xs">
+              <span className="text-muted-foreground">
+                {pendingFile.name} has {sheetOptions.length} sheets · pick one:
+              </span>
+              {sheetOptions.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => void chooseSheet(name)}
+                  className="rounded-lg border border-border bg-muted px-2.5 py-1 font-medium hover:border-primary hover:text-foreground"
+                >
+                  {name}
+                </button>
+              ))}
+              <button type="button" onClick={cancelSheetPick} className="text-subtle hover:text-destructive">
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {!attachment && !sheetOptions && resumable && (
+            <div className="flex items-center gap-2 border-t border-border bg-accent/40 px-4 py-2 text-xs">
+              <Paperclip className="size-3.5 text-primary" />
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                Continue with <span className="font-medium text-foreground">{resumable.fileName}</span> from Upload &amp; Analyze
+              </span>
+              <button
+                type="button"
+                onClick={() => void resumeDataset()}
+                className="shrink-0 rounded-lg border border-border bg-muted px-2.5 py-1 font-semibold hover:border-primary hover:text-foreground"
+              >
+                Use it
+              </button>
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => setResumable(null)}
+                className="text-subtle hover:text-destructive"
+              >
+                <X className="size-3.5" />
+              </button>
             </div>
           )}
 
