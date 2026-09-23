@@ -56,6 +56,103 @@ export type Database = {
         }
         Relationships: []
       }
+      datasets: {
+        Row: {
+          column_count: number | null
+          created_at: string
+          current_version_id: string | null
+          file_size: number | null
+          file_type: string
+          id: string
+          name: string
+          original_filename: string | null
+          row_count: number | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          column_count?: number | null
+          created_at?: string
+          current_version_id?: string | null
+          file_size?: number | null
+          file_type?: string
+          id?: string
+          name: string
+          original_filename?: string | null
+          row_count?: number | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          column_count?: number | null
+          created_at?: string
+          current_version_id?: string | null
+          file_size?: number | null
+          file_type?: string
+          id?: string
+          name?: string
+          original_filename?: string | null
+          row_count?: number | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "datasets_current_version_fkey"
+            columns: ["current_version_id"]
+            isOneToOne: false
+            referencedRelation: "dataset_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dataset_versions: {
+        Row: {
+          column_count: number | null
+          created_at: string
+          dataset_id: string
+          id: string
+          kind: string
+          row_count: number | null
+          storage_key: string
+          user_id: string
+          version_number: number
+        }
+        Insert: {
+          column_count?: number | null
+          created_at?: string
+          dataset_id: string
+          id?: string
+          kind?: string
+          row_count?: number | null
+          storage_key: string
+          user_id: string
+          version_number?: number
+        }
+        Update: {
+          column_count?: number | null
+          created_at?: string
+          dataset_id?: string
+          id?: string
+          kind?: string
+          row_count?: number | null
+          storage_key?: string
+          user_id?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dataset_versions_dataset_id_fkey"
+            columns: ["dataset_id"]
+            isOneToOne: false
+            referencedRelation: "datasets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           created_at: string

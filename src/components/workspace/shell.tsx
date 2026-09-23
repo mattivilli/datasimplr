@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, ChevronLeft, ChevronRight, FileText, HelpCircle, LogOut, Menu, MessageSquare, Settings, Upload, X } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, Database, FileText, HelpCircle, LogOut, Menu, MessageSquare, Settings, Upload, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ds/theme-toggle";
 import { LogoMark } from "@/components/ds/logo";
@@ -11,6 +11,7 @@ const nav = [
   { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { to: "/chat", label: "AI Chat", icon: MessageSquare },
   { to: "/analyze", label: "Upload & Analyze", icon: Upload },
+  { to: "/datasets", label: "My Datasets", icon: Database },
   { to: "/analyses", label: "Past Analyses", icon: FileText },
   { to: "/settings", label: "Settings", icon: Settings },
   { to: "/help", label: "Help", icon: HelpCircle },

@@ -20,6 +20,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedAnalysesIndexRouteImport } from './routes/_authenticated/analyses.index'
 import { Route as AuthenticatedAnalysesIdRouteImport } from './routes/_authenticated/analyses.$id'
+import { Route as AuthenticatedDatasetsIndexRouteImport } from './routes/_authenticated/datasets.index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -76,6 +77,12 @@ const AuthenticatedAnalysesIdRoute = AuthenticatedAnalysesIdRouteImport.update({
   path: '/analyses/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedDatasetsIndexRoute =
+  AuthenticatedDatasetsIndexRouteImport.update({
+    id: '/datasets/',
+    path: '/datasets/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/analyses/$id': typeof AuthenticatedAnalysesIdRoute
   '/analyses/': typeof AuthenticatedAnalysesIndexRoute
+  '/datasets/': typeof AuthenticatedDatasetsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -100,6 +108,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/analyses/$id': typeof AuthenticatedAnalysesIdRoute
   '/analyses': typeof AuthenticatedAnalysesIndexRoute
+  '/datasets': typeof AuthenticatedDatasetsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -114,6 +123,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/analyses/$id': typeof AuthenticatedAnalysesIdRoute
   '/_authenticated/analyses/': typeof AuthenticatedAnalysesIndexRoute
+  '/_authenticated/datasets/': typeof AuthenticatedDatasetsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -128,6 +138,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/analyses/$id'
     | '/analyses/'
+    | '/datasets/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/analyses/$id'
     | '/analyses'
+    | '/datasets'
   id:
     | '__root__'
     | '/'
@@ -153,6 +165,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/analyses/$id'
     | '/_authenticated/analyses/'
+    | '/_authenticated/datasets/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -242,6 +255,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAnalysesIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/datasets/': {
+      id: '/_authenticated/datasets/'
+      path: '/datasets'
+      fullPath: '/datasets/'
+      preLoaderRoute: typeof AuthenticatedDatasetsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -252,6 +272,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedAnalysesIdRoute: typeof AuthenticatedAnalysesIdRoute
   AuthenticatedAnalysesIndexRoute: typeof AuthenticatedAnalysesIndexRoute
+  AuthenticatedDatasetsIndexRoute: typeof AuthenticatedDatasetsIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -261,6 +282,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedAnalysesIdRoute: AuthenticatedAnalysesIdRoute,
   AuthenticatedAnalysesIndexRoute: AuthenticatedAnalysesIndexRoute,
+  AuthenticatedDatasetsIndexRoute: AuthenticatedDatasetsIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

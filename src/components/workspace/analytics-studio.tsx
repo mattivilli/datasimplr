@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  Check,
   ClipboardPaste,
+  DatabaseZap,
   Loader2,
   Play,
   Sparkles,
@@ -64,14 +66,26 @@ type SavePayload = {
   findings: { label: string; value: string; note?: string }[];
 };
 
+export type SaveDatasetPayload = {
+  file: File;
+  name: string;
+  rowCount: number;
+  columnCount: number;
+};
+
 export function AnalyticsStudio({
   onSave,
+  onSaveDataset,
+  initialDataset,
 }: {
   onSave?: (payload: SavePayload) => Promise<void>;
+  onSaveDataset?: (payload: SaveDatasetPayload) => Promise<void>;
+  initialDataset?: { table: Table; sourceName: string; sourceFile: File } | null;
 }) {
   const [mode, setMode] = useState<"upload" | "paste">("upload");
   const [text, setText] = useState(sample);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [raw, setRaw] = useState<Table>(() => parseDelimited(sample));
   const [fill, setFill] = useState<FillStrategy>("mean");
   const [removeDups, setRemoveDups] = useState(true);
@@ -85,6 +99,9 @@ export function AnalyticsStudio({
   const [xCol, setXCol] = useState("");
   const [yCol, setYCol] = useState("");
   const [multiCols, setMultiCols] = useState<string[]>([]);
+  const [savingDataset, setSavingDataset] = useState(false);
+  const [datasetError, setDatasetError] = useState<string | null>(null);
+  const [savedDatasetName, setSavedDatasetName] = useState<string | null>(null);
 
   const table = cleaned.table;
   const types = useMemo(() => detectTypes(table), [table]);
@@ -93,11 +110,13 @@ export function AnalyticsStudio({
     [table, types],
   );
 
-  const applyTable = (next: Table, name: string | null) => {
+  const applyTable = (next: Table, name: string | null, file: File | null = null) => {
     setRaw(next);
     const result = cleanTable(next, { fill, removeDuplicates: removeDups });
     setCleaned(result);
     setFileName(name);
+    setSourceFile(file);
+    setSavedDatasetName(null);
     const nums = next.columns.filter((_, i) => {
       const values = next.rows.map((r) => r[i]).filter(Boolean);
       return values.length > 0;
@@ -114,6 +133,11 @@ export function AnalyticsStudio({
     });
   };
 
+  useEffect(() => {
+    if (initialDataset) applyTable(initialDataset.table, initialDataset.sourceName, initialDataset.sourceFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDataset]);
+
   const onFile = async (file: File | null) => {
     if (!file) return;
     setError(null);
@@ -125,7 +149,7 @@ export function AnalyticsStudio({
         return;
       }
       const parsed = await parseUploadedFile(file, sheets?.[0]);
-      applyTable(parsed.table, parsed.sourceName);
+      applyTable(parsed.table, parsed.sourceName, file);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read that file.");
     }
@@ -136,12 +160,32 @@ export function AnalyticsStudio({
     setError(null);
     try {
       const parsed = await parseUploadedFile(pendingFile, name);
-      applyTable(parsed.table, `${parsed.sourceName} — ${name}`);
+      applyTable(parsed.table, `${parsed.sourceName} — ${name}`, pendingFile);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read that sheet.");
     } finally {
       setPendingFile(null);
       setSheetOptions(null);
+    }
+  };
+
+  const saveDataset = async () => {
+    if (!onSaveDataset || raw.rows.length === 0) return;
+    setSavingDataset(true);
+    setDatasetError(null);
+    try {
+      const file = sourceFile ?? new File([tableToCsv(raw)], fileName ?? "pasted-data.csv", { type: "text/csv" });
+      await onSaveDataset({
+        file,
+        name: fileName ?? "Pasted data",
+        rowCount: raw.rows.length,
+        columnCount: raw.columns.length,
+      });
+      setSavedDatasetName(fileName ?? "Pasted data");
+    } catch (e) {
+      setDatasetError(e instanceof Error ? e.message : "Could not save this dataset.");
+    } finally {
+      setSavingDataset(false);
     }
   };
 
@@ -273,6 +317,30 @@ export function AnalyticsStudio({
             <Meta label="Columns" value={String(table.columns.length)} />
             <Meta label="Numeric" value={String(numericNames.length)} />
           </div>
+
+          {onSaveDataset && (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={saveDataset}
+                disabled={savingDataset || raw.rows.length === 0}
+              >
+                {savingDataset ? (
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                ) : (
+                  <DatabaseZap className="mr-1.5 size-3.5" />
+                )}
+                Save to My Datasets
+              </Button>
+              {savedDatasetName && (
+                <p className="flex items-center gap-1.5 text-xs text-primary">
+                  <Check className="size-3.5" /> Saved “{savedDatasetName}” — find it under My Datasets.
+                </p>
+              )}
+              {datasetError && <p className="text-xs text-destructive">{datasetError}</p>}
+            </div>
+          )}
         </div>
 
         <div className="panel p-5">

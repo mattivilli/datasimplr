@@ -48,7 +48,7 @@ function AnalysesPage() {
       subtitle="Saved results from every dataset you've run."
       actions={
         <Button asChild size="sm">
-          <Link to="/analyze">New analysis</Link>
+          <Link to="/analyze" search={{ dataset: undefined }}>New analysis</Link>
         </Button>
       }
     >
@@ -62,7 +62,7 @@ function AnalysesPage() {
             Upload a dataset or paste a few rows and run a tool — it'll be saved here.
           </p>
           <Button asChild className="mt-5">
-            <Link to="/analyze">Upload & analyze</Link>
+            <Link to="/analyze" search={{ dataset: undefined }}>Upload & analyze</Link>
           </Button>
         </div>
       )}

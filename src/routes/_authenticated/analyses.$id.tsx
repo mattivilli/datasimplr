@@ -108,7 +108,7 @@ function AnalysisDetail() {
               ))}
             </dl>
             <Button asChild className="mt-5 w-full">
-              <Link to="/analyze">Run another tool</Link>
+              <Link to="/analyze" search={{ dataset: undefined }}>Run another tool</Link>
             </Button>
           </div>
         </div>
