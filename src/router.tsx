@@ -8,9 +8,7 @@ export const getRouter = () => {
   const router = createRouter({
     routeTree,
     context: { queryClient },
-    // Local dev sits behind the XAMPP Apache proxy at /datasimplr/ (see vite.config.ts).
-    // Production serves from root on its own dedicated domain.
-    basepath: import.meta.env.DEV ? "/datasimplr" : "/",
+    // Always root — see vite.config.ts for why (Apache strips /datasimplr in dev).
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
   });

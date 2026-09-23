@@ -6,19 +6,15 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
-// @lovable.dev/vite-tanstack-config's types only declare an object-argument overload,
-// but its runtime (dist/index.js) explicitly supports a config-factory function too —
-// verified directly in source. This is an upstream typing gap, not a real type error.
-// @ts-expect-error - see comment above
-export default defineConfig((env) => ({
+// The app always runs at basepath "/" — in local dev, XAMPP's Apache reverse proxy
+// (datasimplr-proxy.conf) strips the /datasimplr prefix before forwarding to this
+// dev server, so the app never needs to know about it. This avoids TanStack Start's
+// dev-basepath-alignment edge cases entirely (a non-root basepath here previously
+// broke all page routing under `vite dev`, independent of how it was configured).
+export default defineConfig({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
     server: { entry: "server" },
   },
-  vite: {
-    // Local dev sits behind the XAMPP Apache proxy at /datasimplr/ (see datasimplr-proxy.conf).
-    // Production builds get their own dedicated domain (Cloudflare Workers), so they serve from root.
-    base: env.command === "serve" ? "/datasimplr/" : "/",
-  },
-}));
+});
