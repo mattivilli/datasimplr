@@ -32,9 +32,9 @@ function AnalyzePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { dataset: datasetId } = Route.useSearch();
-  const [initialDataset, setInitialDataset] = useState<{ table: Table; sourceName: string; sourceFile: File } | null>(
-    null,
-  );
+  const [initialDataset, setInitialDataset] = useState<
+    { table: Table; sourceName: string; sourceFile: File; sheetName: string | null } | null
+  >(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,7 +47,7 @@ function AnalyzePage() {
         const version = await getVersion(dataset.current_version_id);
         if (!version) throw new Error("That dataset's file could not be found.");
         const { table, sourceName, file } = await loadDatasetTable(dataset, version);
-        if (!cancelled) setInitialDataset({ table, sourceName, sourceFile: file });
+        if (!cancelled) setInitialDataset({ table, sourceName, sourceFile: file, sheetName: version.sheet_name });
       } catch (e) {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : "Could not open that dataset.");
       }
@@ -73,6 +73,7 @@ function AnalyzePage() {
             name: payload.name,
             rowCount: payload.rowCount,
             columnCount: payload.columnCount,
+            sheetName: payload.sheetName ?? null,
           });
           queryClient.invalidateQueries({ queryKey: ["datasets"] });
         }}

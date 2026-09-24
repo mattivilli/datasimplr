@@ -1,10 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Database, Download, Loader2, SquareArrowOutUpRight } from "lucide-react";
+import { Database, Download, Loader2, SquareArrowOutUpRight, Sparkles } from "lucide-react";
 import { WorkspaceShell } from "@/components/workspace/shell";
 import { Button } from "@/components/ui/button";
-import { downloadDatasetFile, getVersion, listDatasets, type DatasetRow } from "@/lib/dataset-library";
+import { downloadDatasetFile, getVersion, listDatasetsWithCurrentVersion, type DatasetRow, type DatasetVersionRow } from "@/lib/dataset-library";
+
+const STATUS_LABEL: Record<string, string> = {
+  uploaded: "Original",
+  cleaning: "Cleaning in progress",
+  finalized: "Finalized",
+};
 
 export const Route = createFileRoute("/_authenticated/datasets/")({
   head: () => ({
@@ -27,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/datasets/")({
 function DatasetsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["datasets"],
-    queryFn: listDatasets,
+    queryFn: listDatasetsWithCurrentVersion,
   });
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -79,15 +85,35 @@ function DatasetsPage() {
           <div key={d.id} className="panel p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">{d.status}</p>
-                <p className="mt-1.5 truncate font-display text-base font-semibold">{d.name}</p>
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">
+                  {STATUS_LABEL[d.status] ?? d.status}
+                </p>
+                <Link
+                  to="/datasets/$id"
+                  params={{ id: d.id }}
+                  className="mt-1.5 block truncate font-display text-base font-semibold hover:text-primary"
+                >
+                  {d.name}
+                </Link>
               </div>
+              {d.currentVersion?.quality_score !== null && d.currentVersion?.quality_score !== undefined && (
+                <span className="shrink-0 rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-semibold text-primary">
+                  {d.currentVersion.quality_score}/100
+                </span>
+              )}
             </div>
             <p className="mt-3 font-mono text-[10px] tracking-widest text-subtle">
-              {(d.row_count ?? 0).toLocaleString()} rows × {d.column_count ?? 0} columns ·{" "}
-              {new Date(d.created_at).toLocaleString()}
+              {(d.currentVersion?.row_count ?? d.row_count ?? 0).toLocaleString()} rows ×{" "}
+              {d.currentVersion?.column_count ?? d.column_count ?? 0} columns ·{" "}
+              {new Date(d.updated_at).toLocaleString()}
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
+              <Button asChild size="sm">
+                <Link to="/datasets/$id" params={{ id: d.id }}>
+                  <Sparkles className="mr-1.5 size-3.5" />
+                  Analyze quality
+                </Link>
+              </Button>
               <Button asChild size="sm" variant="outline">
                 <Link to="/analyze" search={{ dataset: d.id }}>
                   <SquareArrowOutUpRight className="mr-1.5 size-3.5" />

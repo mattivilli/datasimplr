@@ -116,7 +116,9 @@ export type Database = {
           dataset_id: string
           id: string
           kind: string
+          quality_score: number | null
           row_count: number | null
+          sheet_name: string | null
           storage_key: string
           user_id: string
           version_number: number
@@ -127,7 +129,9 @@ export type Database = {
           dataset_id: string
           id?: string
           kind?: string
+          quality_score?: number | null
           row_count?: number | null
+          sheet_name?: string | null
           storage_key: string
           user_id: string
           version_number?: number
@@ -138,7 +142,9 @@ export type Database = {
           dataset_id?: string
           id?: string
           kind?: string
+          quality_score?: number | null
           row_count?: number | null
+          sheet_name?: string | null
           storage_key?: string
           user_id?: string
           version_number?: number
@@ -149,6 +155,63 @@ export type Database = {
             columns: ["dataset_id"]
             isOneToOne: false
             referencedRelation: "datasets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dataset_cleaning_log: {
+        Row: {
+          column_name: string | null
+          created_at: string
+          dataset_id: string
+          dataset_version_id: string
+          id: string
+          new_value: string | null
+          operation: string
+          original_value: string | null
+          reason: string | null
+          row_reference: string | null
+          user_id: string
+        }
+        Insert: {
+          column_name?: string | null
+          created_at?: string
+          dataset_id: string
+          dataset_version_id: string
+          id?: string
+          new_value?: string | null
+          operation: string
+          original_value?: string | null
+          reason?: string | null
+          row_reference?: string | null
+          user_id: string
+        }
+        Update: {
+          column_name?: string | null
+          created_at?: string
+          dataset_id?: string
+          dataset_version_id?: string
+          id?: string
+          new_value?: string | null
+          operation?: string
+          original_value?: string | null
+          reason?: string | null
+          row_reference?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dataset_cleaning_log_dataset_id_fkey"
+            columns: ["dataset_id"]
+            isOneToOne: false
+            referencedRelation: "datasets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dataset_cleaning_log_dataset_version_id_fkey"
+            columns: ["dataset_version_id"]
+            isOneToOne: false
+            referencedRelation: "dataset_versions"
             referencedColumns: ["id"]
           },
         ]

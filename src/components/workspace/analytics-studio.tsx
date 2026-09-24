@@ -71,6 +71,7 @@ export type SaveDatasetPayload = {
   name: string;
   rowCount: number;
   columnCount: number;
+  sheetName?: string | null;
 };
 
 export function AnalyticsStudio({
@@ -80,12 +81,13 @@ export function AnalyticsStudio({
 }: {
   onSave?: (payload: SavePayload) => Promise<void>;
   onSaveDataset?: (payload: SaveDatasetPayload) => Promise<void>;
-  initialDataset?: { table: Table; sourceName: string; sourceFile: File } | null;
+  initialDataset?: { table: Table; sourceName: string; sourceFile: File; sheetName?: string | null } | null;
 }) {
   const [mode, setMode] = useState<"upload" | "paste">("upload");
   const [text, setText] = useState(sample);
   const [fileName, setFileName] = useState<string | null>(null);
   const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [sheetName, setSheetName] = useState<string | null>(null);
   const [raw, setRaw] = useState<Table>(() => parseDelimited(sample));
   const [fill, setFill] = useState<FillStrategy>("mean");
   const [removeDups, setRemoveDups] = useState(true);
@@ -110,12 +112,13 @@ export function AnalyticsStudio({
     [table, types],
   );
 
-  const applyTable = (next: Table, name: string | null, file: File | null = null) => {
+  const applyTable = (next: Table, name: string | null, file: File | null = null, sheet: string | null = null) => {
     setRaw(next);
     const result = cleanTable(next, { fill, removeDuplicates: removeDups });
     setCleaned(result);
     setFileName(name);
     setSourceFile(file);
+    setSheetName(sheet);
     setSavedDatasetName(null);
     const nums = next.columns.filter((_, i) => {
       const values = next.rows.map((r) => r[i]).filter(Boolean);
@@ -134,7 +137,8 @@ export function AnalyticsStudio({
   };
 
   useEffect(() => {
-    if (initialDataset) applyTable(initialDataset.table, initialDataset.sourceName, initialDataset.sourceFile);
+    if (initialDataset)
+      applyTable(initialDataset.table, initialDataset.sourceName, initialDataset.sourceFile, initialDataset.sheetName ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialDataset]);
 
@@ -149,7 +153,7 @@ export function AnalyticsStudio({
         return;
       }
       const parsed = await parseUploadedFile(file, sheets?.[0]);
-      applyTable(parsed.table, parsed.sourceName, file);
+      applyTable(parsed.table, parsed.sourceName, file, sheets?.[0] ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read that file.");
     }
@@ -160,7 +164,7 @@ export function AnalyticsStudio({
     setError(null);
     try {
       const parsed = await parseUploadedFile(pendingFile, name);
-      applyTable(parsed.table, `${parsed.sourceName} — ${name}`, pendingFile);
+      applyTable(parsed.table, `${parsed.sourceName} — ${name}`, pendingFile, name);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read that sheet.");
     } finally {
@@ -180,6 +184,7 @@ export function AnalyticsStudio({
         name: fileName ?? "Pasted data",
         rowCount: raw.rows.length,
         columnCount: raw.columns.length,
+        sheetName,
       });
       setSavedDatasetName(fileName ?? "Pasted data");
     } catch (e) {
