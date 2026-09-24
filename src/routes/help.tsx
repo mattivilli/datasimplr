@@ -217,7 +217,7 @@ function HelpPage() {
 
         <p className="mt-8 text-xs text-muted-foreground">
           Still stuck? Ask the AI directly in{" "}
-          <Link to="/chat" search={{ c: undefined }} className="text-primary hover:underline">
+          <Link to="/chat" search={{ c: undefined, dataset: undefined, version: undefined, sheet: undefined, explain: undefined }} className="text-primary hover:underline">
             AI Chat
           </Link>{" "}
           —

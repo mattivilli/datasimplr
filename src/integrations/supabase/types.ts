@@ -219,29 +219,53 @@ export type Database = {
       conversations: {
         Row: {
           created_at: string
+          dataset_id: string | null
+          dataset_version_id: string | null
           id: string
           kind: string
+          sheet_name: string | null
           title: string
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          dataset_id?: string | null
+          dataset_version_id?: string | null
           id?: string
           kind?: string
+          sheet_name?: string | null
           title?: string
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
+          dataset_id?: string | null
+          dataset_version_id?: string | null
           id?: string
           kind?: string
+          sheet_name?: string | null
           title?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "conversations_dataset_id_fkey"
+            columns: ["dataset_id"]
+            isOneToOne: false
+            referencedRelation: "datasets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_dataset_version_id_fkey"
+            columns: ["dataset_version_id"]
+            isOneToOne: false
+            referencedRelation: "dataset_versions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {

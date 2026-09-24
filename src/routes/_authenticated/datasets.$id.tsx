@@ -72,7 +72,9 @@ function DatasetWorkspace() {
       const { table: loaded } = await loadDatasetTable(ds, current);
       setDataset(ds);
       setVersions(vs);
-      setWorkingVersion(current.kind === "original" ? null : current);
+      // Only an in-progress working copy is editable in place; original and
+      // finalized versions are immutable, so editing them starts a new working version.
+      setWorkingVersion(current.kind === "working" ? current : null);
       setTable(loaded);
       setLog(await getCleaningLogForDataset(ds.id));
     } catch (e) {
@@ -279,6 +281,16 @@ function DatasetWorkspace() {
               Analyze
             </Link>
           </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link to="/chat" search={{ c: undefined, dataset: dataset.id, version: undefined, sheet: undefined, explain: undefined }}>
+              Chat
+            </Link>
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link to="/lab" search={{ dataset: dataset.id, version: undefined, sheet: undefined }}>
+              PythonLab
+            </Link>
+          </Button>
         </div>
       }
     >
@@ -295,7 +307,7 @@ function DatasetWorkspace() {
                 </p>
               </div>
               <div className="flex items-center gap-2 text-xs">
-                {log.length > 0 && (
+                {log.length > 0 && workingVersion && (
                   <Button size="sm" variant="outline" onClick={undoLastOperation} disabled={undoing}>
                     {undoing ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Undo2 className="mr-1.5 size-3.5" />}
                     Undo last change

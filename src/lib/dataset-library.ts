@@ -106,10 +106,18 @@ export async function getVersion(id: string): Promise<DatasetVersionRow | null> 
 // Downloads the stored file for a version. RLS on storage.objects is what
 // actually enforces ownership here — this call fails for anyone but the
 // owner regardless of what the caller claims.
-async function downloadVersionBlob(version: DatasetVersionRow): Promise<Blob> {
+export async function downloadVersionBlob(version: DatasetVersionRow): Promise<Blob> {
   const { data, error } = await supabase.storage.from(DATASET_BUCKET).download(version.storage_key);
   if (error) throw error;
   return data;
+}
+
+// Working/finalized versions are always stored as CSV snapshots, so they must
+// be parsed as CSV — parsing them under the original .xls/.xlsx name would
+// push them through the spreadsheet reader and reformat date-like strings.
+export function versionFilename(dataset: DatasetRow, version: DatasetVersionRow): string {
+  const original = dataset.original_filename ?? `${dataset.name}.csv`;
+  return version.kind === "original" ? original : `${original.replace(/\.[^.]+$/, "")}.csv`;
 }
 
 export async function loadDatasetTable(
@@ -117,7 +125,7 @@ export async function loadDatasetTable(
   version: DatasetVersionRow,
 ): Promise<{ table: Table; sourceName: string; file: File }> {
   const blob = await downloadVersionBlob(version);
-  const filename = dataset.original_filename ?? `${dataset.name}.csv`;
+  const filename = versionFilename(dataset, version);
   const file = new File([blob], filename, { type: blob.type });
   const parsed = await parseUploadedFile(file, version.sheet_name ?? undefined);
   return { table: parsed.table, sourceName: dataset.name, file };
@@ -197,6 +205,7 @@ export async function saveWorkingVersion(params: {
       user_id: userId,
       version_number: nextVersionNumber,
       kind: "working",
+      sheet_name: versions.find((v) => v.kind === "original")?.sheet_name ?? null,
       storage_key: storageKey,
       row_count: table.rows.length,
       column_count: table.columns.length,
@@ -240,6 +249,7 @@ export async function finalizeDataset(params: {
       user_id: userId,
       version_number: nextVersionNumber,
       kind: "finalized",
+      sheet_name: versions.find((v) => v.kind === "original")?.sheet_name ?? null,
       storage_key: storageKey,
       row_count: table.rows.length,
       column_count: table.columns.length,

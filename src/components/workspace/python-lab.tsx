@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertTriangle, Loader2, Play, Sparkles, Terminal, Upload } from "lucide-react";
+import { AlertTriangle, Loader2, MessageSquareText, Play, Sparkles, Terminal, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { codeNeedsDataset, findBlocked, nextSteps, runPython, starterPython } from "@/lib/pyodide-runtime";
 import { loadActiveDataset, saveActiveDataset, subscribeDataset } from "@/lib/dataset-store";
@@ -8,17 +8,22 @@ import { parseUploadedFile } from "@/lib/parse-file";
 import { tableToCsv } from "@/lib/analysis";
 import { fixPython } from "@/lib/ai.functions";
 import { extractCodeBlocks } from "./copy-button";
+import type { ExplainPayload } from "@/lib/dataset-context";
 
 export function PythonLab({
   csv,
   fileName,
   columns,
   seedCode,
+  request,
+  onExplain,
 }: {
   csv?: string | undefined;
   fileName?: string | null | undefined;
   columns?: string[] | undefined;
   seedCode?: string | undefined;
+  request?: string | undefined;
+  onExplain?: ((result: ExplainPayload) => void) | undefined;
 }) {
   const fix = useServerFn(fixPython);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -37,6 +42,15 @@ export function PythonLab({
   const [ran, setRan] = useState(false);
   const [aiNote, setAiNote] = useState<string | null>(null);
   const [needUpload, setNeedUpload] = useState(false);
+  const [lastRun, setLastRun] = useState<ExplainPayload | null>(null);
+  const lastStarter = useRef(starter);
+
+  // When a different dataset/version/sheet is bound, refresh the starter code,
+  // but only if the user hasn't edited or been handed their own code.
+  useEffect(() => {
+    if (!seedCode) setCode((prev) => (prev === lastStarter.current ? starter : prev));
+    lastStarter.current = starter;
+  }, [starter, seedCode]);
 
   useEffect(() => {
     if (seedCode) setCode(seedCode);
@@ -130,10 +144,12 @@ export function PythonLab({
         setImages([]);
         setStdout("");
         setError(hits.map((h) => `${h.label} — ${h.hint}`).join("\n"));
+        setLastRun({ code, stdout: "", error: hits.map((h) => h.label + ": " + h.hint).join("; "), imageCount: 0 });
         setStatus("This snippet needs libraries the lab cannot load.");
         return;
       }
       const result = await runPython(code, data, boundName || fileName);
+      setLastRun({ code, stdout: result.stdout, error: result.error ?? null, imageCount: result.images.length });
       setStdout(result.stdout);
       setImages(result.images);
       setError(result.error ?? null);
@@ -234,7 +250,18 @@ export function PythonLab({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {request && (
+          <p className="mb-2 rounded-lg border border-border bg-accent/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+            <span className="font-semibold text-foreground">Request from Chat:</span> {request}
+          </p>
+        )}
         <p className="font-mono text-[10px] uppercase tracking-widest text-subtle">{status}</p>
+        {onExplain && lastRun && (
+          <Button size="sm" variant="outline" className="mt-2" onClick={() => onExplain(lastRun)}>
+            <MessageSquareText className="mr-1.5 size-3.5" />
+            Explain in AI Chat
+          </Button>
+        )}
         {stdout && (
           <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-background p-2 font-mono text-[11px] text-muted-foreground">
             {stdout}

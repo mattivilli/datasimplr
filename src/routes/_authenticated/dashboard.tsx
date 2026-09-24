@@ -93,7 +93,7 @@ function Dashboard() {
         <div className="panel p-5">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-base font-semibold">Recent chats</h2>
-            <Link to="/chat" search={{ c: undefined }} className="text-xs text-primary hover:underline">
+            <Link to="/chat" search={{ c: undefined, dataset: undefined, version: undefined, sheet: undefined, explain: undefined }} className="text-xs text-primary hover:underline">
               View all
             </Link>
           </div>
@@ -105,7 +105,7 @@ function Dashboard() {
               <Link
                 key={c.id}
                 to="/chat"
-                search={{ c: c.id }}
+                search={{ c: c.id, dataset: undefined, version: undefined, sheet: undefined, explain: undefined }}
                 className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted px-3.5 py-2.5 text-sm transition-colors hover:border-primary"
               >
                 <span className="truncate">{c.title}</span>

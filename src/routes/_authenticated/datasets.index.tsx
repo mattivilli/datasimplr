@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Database, Download, Loader2, SquareArrowOutUpRight, Sparkles } from "lucide-react";
+import { Database, Download, Loader2, MessageSquare, SquareArrowOutUpRight, Sparkles, Terminal } from "lucide-react";
 import { WorkspaceShell } from "@/components/workspace/shell";
 import { Button } from "@/components/ui/button";
 import { downloadDatasetFile, getVersion, listDatasetsWithCurrentVersion, type DatasetRow, type DatasetVersionRow } from "@/lib/dataset-library";
@@ -118,6 +118,18 @@ function DatasetsPage() {
                 <Link to="/analyze" search={{ dataset: d.id }}>
                   <SquareArrowOutUpRight className="mr-1.5 size-3.5" />
                   Open in Analyzer
+                </Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link to="/chat" search={{ c: undefined, dataset: d.id, version: undefined, sheet: undefined, explain: undefined }}>
+                  <MessageSquare className="mr-1.5 size-3.5" />
+                  Chat
+                </Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link to="/lab" search={{ dataset: d.id, version: undefined, sheet: undefined }}>
+                  <Terminal className="mr-1.5 size-3.5" />
+                  PythonLab
                 </Link>
               </Button>
               <Button size="sm" variant="outline" onClick={() => download(d)} disabled={downloadingId === d.id}>

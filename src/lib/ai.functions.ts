@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getServerEnv } from "@/lib/server-env";
+import { queryOpSchema, type QueryOp } from "@/lib/dataset-query";
 
 export const GROQ_MODELS = [
   { id: "openai/gpt-oss-20b", label: "GPT-OSS 20B", badge: "Economy", desc: "Best cost / speed on Groq free" },
@@ -49,11 +50,15 @@ say it doesn't exist in DataSimplr — never invent a plausible-sounding feature
   layer can't be read. Pasting a comma- or tab-separated table straight into the chat box is also
   recognised as a dataset automatically. If the user recently cleaned or analysed a file in Upload &
   Analyze, chat offers a one-click "continue with that file" option instead of re-uploading.
-- Python Lab opens from a "Run in lab" button under a code block in chat. It is Pyodide — real Python
+- PythonLab opens from the "Python lab" button in chat, from a "Run in PythonLab" button under a code block in chat, or from My Datasets. It is Pyodide — real Python
   running entirely in the user's browser tab, no install, no server execution. Only pandas, numpy, and
   matplotlib are available. It does NOT have scikit-learn, TensorFlow, PyTorch, network access, or a
   database connection — for anything those would do, point the user to the Regression/Clustering/PCA
   tools in Upload & Analyze instead, not to a Python library that isn't there.
+- My Datasets (/datasets) holds datasets the user saved from Upload & Analyze. Each has a quality workspace
+  (issues, before/after preview, cleaning log, undo, finalize), and can be opened in Chat or PythonLab so the
+  user never re-uploads. When Chat is on a saved dataset, numbers in answers come from operations actually run
+  on that dataset version and sheet — the "Computed results" section of the context — not from memory.
 - Settings (/settings) only has display name and a profile picture URL. Email isn't editable there. No
   password change, billing, or API keys anywhere in the product.
 - Chats and analyses are saved to the user's account automatically once signed in.
@@ -90,6 +95,11 @@ it. Never use input() — the Lab runs the whole script at once with no terminal
 fails there. For a simple practice program (palindrome check, prime check, string reversal, etc.), hardcode
 a few example values in a list and loop over them instead, e.g. tests = ["Racecar", "Hello"]. Fence code as
 \`\`\`python.
+
+When a saved dataset is active in Chat, the variable df in PythonLab already holds that exact version and
+sheet. For requests to chart, plot, cluster, regress or otherwise analyse it, give a one-line plan and one
+python block that uses df directly (never read a file, never call input()), so the user can click "Run in
+PythonLab".
 
 English only.`;
 
@@ -208,3 +218,98 @@ export const fixPython = createServerFn({ method: "POST" })
     return { reply, code: match?.[1]?.trim() ?? "" };
   });
 
+
+
+const planSchema = z.object({
+  question: z.string().min(1).max(2000),
+  recent: z.array(z.string().max(500)).max(4).optional(),
+  schema: z.object({
+    name: z.string().max(300),
+    rows: z.number(),
+    columns: z
+      .array(z.object({ name: z.string().max(120), type: z.string().max(20), sample: z.array(z.string().max(60)).max(4) }))
+      .max(60),
+  }),
+  model: z.string().max(80).optional(),
+});
+
+const PLANNER = `You turn a question about a tabular dataset into a small JSON plan of operations that a program will run on the real data. You never answer the question and never invent numbers.
+
+Reply with ONLY a JSON object: {"ops": [ ... ]} with 0 to 4 operations, using ONLY these shapes (column names must be copied exactly from the schema):
+- {"op":"describe"}                                   profile of every column
+- {"op":"quality"}                                    data-quality score and still-flagged issues
+- {"op":"aggregate","metric":COL,"agg":"sum|avg|min|max|median|count","filters":[FILTER]}   (count needs no metric)
+- {"op":"group","groupBy":[COL] or [COL,COL],"metric":COL,"agg":AGG,"sort":"asc|desc","limit":N,"filters":[FILTER]}
+- {"op":"top_n","by":COL,"n":N,"order":"asc|desc","columns":[COL,...],"filters":[FILTER]}
+- {"op":"time_trend","dateColumn":COL,"metric":COL,"agg":AGG,"granularity":"day|week|month|quarter|year","filters":[FILTER]}
+- {"op":"compare","column":COL,"values":[V1,V2],"metric":COL,"agg":AGG,"filters":[FILTER]}
+- {"op":"value_counts","column":COL,"limit":N,"filters":[FILTER]}
+- {"op":"correlation","columns":[COL,...]}
+FILTER = {"column":COL,"op":"eq|neq|gt|gte|lt|lte|contains|in","value":VALUE}
+
+Rules: "top products by revenue" = group by the product column with agg sum on the revenue column, sort desc. For "summarize/overview/management summary" use describe, quality and, when there are several numeric columns, correlation. For questions about data quality or what is left unresolved use quality. For "unusual/anomalies" use quality plus time_trend when a date column exists. If the question needs no computation (a pure concept question) return {"ops":[]}. If the question refers to something that isn't in the schema, return {"ops":[]}. Use the recent questions only to resolve words like "it" or "that".`;
+
+export const planDatasetQuery = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => planSchema.parse(data))
+  .handler(async ({ data }): Promise<{ ops: QueryOp[] }> => {
+    const apiKey = await getServerEnv("GROQ_API_KEY");
+    if (!apiKey || !apiKey.startsWith("gsk_")) return { ops: [] };
+
+    const allowed = new Set<string>(GROQ_MODELS.map((m) => m.id));
+    const model = data.model && allowed.has(data.model) && !data.model.startsWith("groq/") ? data.model : DEFAULT_GROQ_MODEL;
+    const user = [
+      `Dataset: ${data.schema.name} (${data.schema.rows} rows)`,
+      "Columns:",
+      ...data.schema.columns.map((c) => `- ${c.name} [${c.type}] e.g. ${c.sample.join(" | ")}`),
+      data.recent?.length ? `Recent questions: ${data.recent.join(" / ")}` : "",
+      `Question: ${data.question}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const body = (jsonMode: boolean) =>
+      JSON.stringify({
+        model,
+        temperature: 0,
+        max_tokens: 1800,
+        ...(model.startsWith("openai/gpt-oss") ? { reasoning_effort: "low" } : {}),
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+        messages: [
+          { role: "system", content: PLANNER },
+          { role: "user", content: user },
+        ],
+      });
+    const call = (jsonMode: boolean) =>
+      fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: body(jsonMode),
+      });
+
+    let res = await call(true);
+    if (!res.ok) res = await call(false);
+    if (!res.ok) {
+      console.error("Groq planner error", res.status, await res.text());
+      return { ops: [] };
+    }
+    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    const text = (json.choices?.[0]?.message?.content ?? "").replace(/<think>[\s\S]*?<\/think>/gi, "");
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start < 0 || end <= start) return { ops: [] };
+    try {
+      // Models often emit null for unused optional fields; treat null as "absent".
+      const parsed = JSON.parse(text.slice(start, end + 1), (_k, v) => (v === null ? undefined : v)) as { ops?: unknown };
+      const raw = Array.isArray(parsed.ops) ? parsed.ops.slice(0, 4) : [];
+      const ops: QueryOp[] = [];
+      for (const item of raw) {
+        const ok = queryOpSchema.safeParse(item);
+        if (ok.success) ops.push(ok.data);
+        else console.error("Planner operation rejected", JSON.stringify(item), ok.error.issues[0]?.message);
+      }
+      return { ops };
+    } catch {
+      return { ops: [] };
+    }
+  });

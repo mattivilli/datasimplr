@@ -17,6 +17,7 @@ import { Route as TryRouteImport } from './routes/try'
 import { Route as AuthenticatedAnalyzeRouteImport } from './routes/_authenticated/analyze'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedLabRouteImport } from './routes/_authenticated/lab'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedAnalysesIndexRouteImport } from './routes/_authenticated/analyses.index'
 import { Route as AuthenticatedAnalysesIdRouteImport } from './routes/_authenticated/analyses.$id'
@@ -62,6 +63,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedLabRoute = AuthenticatedLabRouteImport.update({
+  id: '/lab',
+  path: '/lab',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -98,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/analyze': typeof AuthenticatedAnalyzeRoute
   '/chat': typeof AuthenticatedChatRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/lab': typeof AuthenticatedLabRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/analyses/$id': typeof AuthenticatedAnalysesIdRoute
   '/datasets/$id': typeof AuthenticatedDatasetsIdRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   '/analyze': typeof AuthenticatedAnalyzeRoute
   '/chat': typeof AuthenticatedChatRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/lab': typeof AuthenticatedLabRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/analyses/$id': typeof AuthenticatedAnalysesIdRoute
   '/datasets/$id': typeof AuthenticatedDatasetsIdRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   '/_authenticated/analyze': typeof AuthenticatedAnalyzeRoute
   '/_authenticated/chat': typeof AuthenticatedChatRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/lab': typeof AuthenticatedLabRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/analyses/$id': typeof AuthenticatedAnalysesIdRoute
   '/_authenticated/datasets/$id': typeof AuthenticatedDatasetsIdRoute
@@ -144,6 +153,7 @@ export interface FileRouteTypes {
     | '/analyze'
     | '/chat'
     | '/dashboard'
+    | '/lab'
     | '/settings'
     | '/analyses/$id'
     | '/datasets/$id'
@@ -158,6 +168,7 @@ export interface FileRouteTypes {
     | '/analyze'
     | '/chat'
     | '/dashboard'
+    | '/lab'
     | '/settings'
     | '/analyses/$id'
     | '/datasets/$id'
@@ -173,6 +184,7 @@ export interface FileRouteTypes {
     | '/_authenticated/analyze'
     | '/_authenticated/chat'
     | '/_authenticated/dashboard'
+    | '/_authenticated/lab'
     | '/_authenticated/settings'
     | '/_authenticated/analyses/$id'
     | '/_authenticated/datasets/$id'
@@ -246,6 +258,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/lab': {
+      id: '/_authenticated/lab'
+      path: '/lab'
+      fullPath: '/lab'
+      preLoaderRoute: typeof AuthenticatedLabRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
       path: '/settings'
@@ -288,6 +307,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAnalyzeRoute: typeof AuthenticatedAnalyzeRoute
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedLabRoute: typeof AuthenticatedLabRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedAnalysesIdRoute: typeof AuthenticatedAnalysesIdRoute
   AuthenticatedDatasetsIdRoute: typeof AuthenticatedDatasetsIdRoute
@@ -299,6 +319,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAnalyzeRoute: AuthenticatedAnalyzeRoute,
   AuthenticatedChatRoute: AuthenticatedChatRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedLabRoute: AuthenticatedLabRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedAnalysesIdRoute: AuthenticatedAnalysesIdRoute,
   AuthenticatedDatasetsIdRoute: AuthenticatedDatasetsIdRoute,

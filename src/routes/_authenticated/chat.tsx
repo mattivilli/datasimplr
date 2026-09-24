@@ -1,10 +1,24 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ChevronLeft, ChevronRight, Loader2, Paperclip, Plus, Send, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { askAssistant, DEFAULT_GROQ_MODEL, GROQ_MODELS } from "@/lib/ai.functions";
+import { askAssistant, DEFAULT_GROQ_MODEL, GROQ_MODELS, planDatasetQuery } from "@/lib/ai.functions";
+import {
+  buildDatasetMeta,
+  explainPrompt,
+  plannerSchema,
+  pythonInputs,
+  PY_MAX_ROWS,
+  stashLabHandoff,
+  takeExplain,
+  type DatasetSelection,
+  type ExplainPayload,
+} from "@/lib/dataset-context";
+import { formatResultsForPrompt, runQueryOp, type QueryResult } from "@/lib/dataset-query";
+import { DatasetContextBar } from "@/components/workspace/dataset-context-bar";
+import { useDatasetContext } from "@/components/workspace/use-dataset-context";
 import {
   ANALYZE_PROMPT,
   chatFileSheetNames,
@@ -25,6 +39,10 @@ import { ScrollTop } from "@/components/workspace/scroll-top";
 export const Route = createFileRoute("/_authenticated/chat")({
   validateSearch: (search: Record<string, unknown>) => ({
     c: typeof search["c"] === "string" ? search["c"] : undefined,
+    dataset: typeof search["dataset"] === "string" ? search["dataset"] : undefined,
+    version: typeof search["version"] === "string" ? search["version"] : undefined,
+    sheet: typeof search["sheet"] === "string" ? search["sheet"] : undefined,
+    explain: search["explain"] === "1" || search["explain"] === 1 ? "1" : undefined,
   }),
   head: () => ({
     meta: [
@@ -47,13 +65,38 @@ const starters = [
   "Recommend clustering or PCA on this dataset.",
 ];
 
+const datasetStarters = [
+  "Summarize this dataset for management.",
+  "Which data-quality issues remain?",
+  "What changed between the original and finalized dataset?",
+  "Find potential anomalies.",
+];
+
+// Stored user messages start with a "[Dataset] name | version" badge line; the
+// analysis request handed to PythonLab should be just what the user asked.
+const stripDatasetHeader = (text: string) => text.replace(/^\[Dataset\][^\n]*\n\n/, "");
+
+const NO_DATASET = { dataset: undefined, version: undefined, sheet: undefined, explain: undefined } as const;
+
 type Message = { id: string; role: string; content: string; created_at: string };
 
 function ChatPage() {
-  const { c } = Route.useSearch();
+  const { c, dataset, version, sheet, explain } = Route.useSearch();
   const navigate = useNavigate({ from: "/chat" });
   const queryClient = useQueryClient();
   const ask = useServerFn(askAssistant);
+  const plan = useServerFn(planDatasetQuery);
+  const selection: DatasetSelection | null = dataset ? { datasetId: dataset, versionId: version, sheetName: sheet } : null;
+  const dsState = useDatasetContext(selection);
+  const dsRef = useRef(dsState);
+  dsRef.current = dsState;
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+  const skipPlanRef = useRef(false);
+  const clearedFor = useRef<string | null>(null);
+  const explainHandled = useRef(false);
+  const [labRequest, setLabRequest] = useState<string | undefined>();
+  const py = useMemo(() => (dsState.ctx ? pythonInputs(dsState.ctx) : null), [dsState.ctx]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [model, setModel] = useState<string>(DEFAULT_GROQ_MODEL);
@@ -74,6 +117,80 @@ function ChatPage() {
   useEffect(() => {
     void loadActiveDataset().then(setResumable);
   }, []);
+
+  const { data: convDataset } = useQuery({
+    queryKey: ["conv-dataset", c],
+    enabled: !!c && !dataset,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("conversations")
+        .select("dataset_id, dataset_version_id, sheet_name")
+        .eq("id", c!)
+        .maybeSingle();
+      return error ? null : data;
+    },
+  });
+
+  useEffect(() => {
+    if (c && !dataset && convDataset?.dataset_id && clearedFor.current !== c) {
+      void navigate({
+        search: {
+          c,
+          dataset: convDataset.dataset_id,
+          version: convDataset.dataset_version_id ?? undefined,
+          sheet: convDataset.sheet_name ?? undefined,
+          explain: undefined,
+        },
+        replace: true,
+      });
+    }
+  }, [c, dataset, convDataset, navigate]);
+
+  const effectiveVersionId = dsState.ctx?.requestedVersion.id;
+  const effectiveSheet = dsState.ctx?.sheetName ?? null;
+  const effectiveDatasetId = dsState.ctx?.dataset.id;
+  useEffect(() => {
+    if (!c || !effectiveDatasetId) return;
+    void supabase
+      .from("conversations")
+      .update({ dataset_id: effectiveDatasetId, dataset_version_id: effectiveVersionId ?? null, sheet_name: effectiveSheet })
+      .eq("id", c)
+      .then(
+        () => undefined,
+        () => undefined,
+      );
+  }, [c, effectiveDatasetId, effectiveVersionId, effectiveSheet]);
+
+  const selectDataset = (next: DatasetSelection | null) => {
+    if (next) {
+      clearedFor.current = null;
+      setAttachment(null);
+      attachmentRef.current = null;
+      setResumable(null);
+    } else {
+      clearedFor.current = c ?? null;
+      if (c) {
+        void supabase
+          .from("conversations")
+          .update({ dataset_id: null, dataset_version_id: null, sheet_name: null })
+          .eq("id", c)
+          .then(
+            () => undefined,
+            () => undefined,
+          );
+      }
+    }
+    void navigate({
+      search: {
+        c,
+        dataset: next?.datasetId,
+        version: next?.versionId,
+        sheet: next?.sheetName,
+        explain: undefined,
+      },
+      replace: true,
+    });
+  };
 
   const { data: conversations } = useQuery({
     queryKey: ["conversations"],
@@ -121,21 +238,39 @@ function ChatPage() {
   const send = useMutation({
     mutationFn: async (text: string) => {
       const file = attachmentRef.current;
-      const visible = file ? `📎 ${file.name}\n\n${text}` : text;
+      const ds = file ? null : dsRef.current.ctx;
+      const visible = ds
+        ? `[Dataset] ${ds.displayName} | ${ds.versionLabel}` + String.fromCharCode(10, 10) + text
+        : file ? `📎 ${file.name}\n\n${text}` : text;
       const { data: auth } = await supabase.auth.getUser();
       const userId = auth.user!.id;
 
       let conversationId = c;
       if (!conversationId) {
-        const title = file ? `${file.name}: ${text}`.slice(0, 60) : text.slice(0, 60);
+        const title = ds
+          ? `${ds.displayName}: ${text}`.slice(0, 60)
+          : file ? `${file.name}: ${text}`.slice(0, 60) : text.slice(0, 60);
         const { data, error } = await supabase
           .from("conversations")
-          .insert({ user_id: userId, title, kind: "expert" })
+          .insert({
+            user_id: userId,
+            title,
+            kind: "expert",
+            ...(ds ? { dataset_id: ds.dataset.id, dataset_version_id: ds.requestedVersion.id, sheet_name: ds.sheetName } : {}),
+          })
           .select("id")
           .single();
         if (error) throw error;
         conversationId = data.id;
-        await navigate({ search: { c: conversationId } });
+        await navigate({
+          search: {
+            c: conversationId,
+            dataset: ds?.dataset.id,
+            version: ds?.requestedVersion.id,
+            sheet: ds?.sheetName ?? undefined,
+            explain: undefined,
+          },
+        });
       }
 
       await supabase
@@ -150,8 +285,42 @@ function ChatPage() {
         { role: "user" as const, content: text },
       ];
 
+      let context = file?.context;
+      if (ds) {
+        // Plan -> compute on the real data -> explain. Only the schema goes to
+        // the planner; only the (small) computed results go to the explainer.
+        let results: QueryResult[] = [];
+        const skipPlan = skipPlanRef.current;
+        skipPlanRef.current = false;
+        if (!skipPlan) {
+          try {
+            const recent = (messages ?? []).filter((m) => m.role === "user").slice(-3).map((m) => m.content.slice(0, 300));
+            const planned = await plan({ data: { question: text, recent, schema: plannerSchema(ds), model } });
+            results = planned.ops.map((op) => runQueryOp(ds.table, op));
+          } catch (e) {
+            console.error("Dataset planning failed", e);
+          }
+        }
+        const nl = String.fromCharCode(10);
+        context = [
+          buildDatasetMeta(ds, dsRef.current.log),
+          "",
+          results.length
+            ? "## Computed results (run on the real dataset just now; authoritative - quote numbers exactly, never adjust them)" +
+              nl +
+              formatResultsForPrompt(results)
+            : "## Computed results" +
+              nl +
+              "(No operation was run for this question. Do not state new figures; say what is missing, or suggest running it in PythonLab.)",
+          "",
+          "Answer the user's question directly and concisely, using the computed results and dataset facts above. Use the Snapshot / Key findings layout only when they ask for a full summary. State which version and sheet the numbers come from.",
+        ]
+          .join(nl)
+          .slice(0, 15800);
+      }
+
       const { reply } = await ask({
-        data: { messages: history.slice(-20), model, context: file?.context },
+        data: { messages: history.slice(-20), model, ...(context ? { context } : {}) },
       });
 
       await supabase
@@ -179,7 +348,11 @@ function ChatPage() {
   const submit = (text: string) => {
     const trimmed = text.trim();
     if ((!trimmed && !attachmentRef.current) || send.isPending) return;
-    if (!attachmentRef.current && trimmed) {
+    if (selectionRef.current && !dsRef.current.ctx) {
+      setChatError(dsRef.current.error ?? "The dataset is still loading - try again in a moment.");
+      return;
+    }
+    if (!attachmentRef.current && !dsRef.current.ctx && trimmed) {
       const table = detectPastedTable(trimmed);
       if (table) {
         const built = datasetContext(table, "Pasted data");
@@ -193,7 +366,10 @@ function ChatPage() {
     setInput("");
     setFileError(null);
     setChatError(null);
-    setPending(attachmentRef.current ? `📎 ${attachmentRef.current.name}\n\n${prompt}` : prompt);
+    setPending(
+      dsRef.current.ctx && !attachmentRef.current
+        ? `[Dataset] ${dsRef.current.ctx.displayName} | ${dsRef.current.ctx.versionLabel}` + String.fromCharCode(10, 10) + prompt
+        : attachmentRef.current ? `📎 ${attachmentRef.current.name}\n\n${prompt}` : prompt);
     send.mutate(prompt);
   };
 
@@ -201,6 +377,7 @@ function ChatPage() {
     setReadingFile(true);
     try {
       const prepared = await prepareChatFile(file, sheetName);
+      if (selectionRef.current) selectDataset(null);
       setAttachment(prepared);
       attachmentRef.current = prepared;
       setResumable(null);
@@ -253,6 +430,34 @@ function ChatPage() {
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  const submitExplain = (result: ExplainPayload) => {
+    const ctx = dsRef.current.ctx;
+    if (!ctx) return;
+    skipPlanRef.current = true;
+    submit(explainPrompt(ctx, result));
+  };
+
+  useEffect(() => {
+    if (!explain || !dsState.ctx || explainHandled.current) return;
+    const payload = takeExplain();
+    explainHandled.current = true;
+    void navigate({ search: { c, dataset, version, sheet, explain: undefined }, replace: true });
+    if (payload) submitExplain(payload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [explain, dsState.ctx]);
+
+  const openFullLab = (code: string, question: string) => {
+    const sel = selectionRef.current;
+    if (!sel) return;
+    stashLabHandoff({ request: question, code });
+    void navigate({ to: "/lab", search: { dataset: sel.datasetId, version: sel.versionId, sheet: sel.sheetName } });
+  };
+
+  const runInLab = (code: string, question: string) => {
+    setLabRequest(question);
+    openPythonLab(code);
+  };
+
   const resumeDataset = async () => {
     if (!resumable) return;
     setReadingFile(true);
@@ -271,7 +476,7 @@ function ChatPage() {
     await supabase.from("conversations").delete().eq("id", id);
     queryClient.invalidateQueries({ queryKey: ["conversations"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    if (c === id) await navigate({ search: { c: undefined } });
+    if (c === id) await navigate({ search: { c: undefined, dataset, version, sheet, explain: undefined } });
   };
 
   return (
@@ -293,7 +498,13 @@ function ChatPage() {
         </select>
       }
     >
-      <WithPythonSplit csv={attachment?.csv} fileName={attachment?.name} columns={attachment?.columns}>
+      <WithPythonSplit
+        csv={py?.csv ?? attachment?.csv}
+        fileName={py?.fileName ?? attachment?.name}
+        columns={py?.columns ?? attachment?.columns}
+        request={labRequest}
+        onExplain={dsState.ctx ? submitExplain : undefined}
+      >
       <div className={`grid min-h-[calc(100dvh-8.5rem)] min-w-0 gap-3 ${chatsOpen ? "lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)]" : "lg:grid-cols-[auto_minmax(0,1fr)]"}`}>
         <div className={`relative min-w-0 ${chatsOpen ? "" : "lg:w-10"}`}>
           <button
@@ -306,7 +517,7 @@ function ChatPage() {
           </button>
           {chatsOpen ? (
         <div className="panel flex h-full max-h-[calc(100dvh-8.5rem)] flex-col p-3">
-          <Button className="w-full shrink-0" size="sm" onClick={() => navigate({ search: { c: undefined } })}>
+          <Button className="w-full shrink-0" size="sm" onClick={() => navigate({ search: { c: undefined, dataset, version, sheet, explain: undefined } })}>
             <Plus className="mr-1.5 size-4" /> New chat
           </Button>
           <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">Saved chats</p>
@@ -322,7 +533,7 @@ function ChatPage() {
                 }`}
               >
                 <button
-                  onClick={() => navigate({ search: { c: conv.id } })}
+                  onClick={() => navigate({ search: { c: conv.id, ...NO_DATASET } })}
                   className="min-w-0 flex-1 truncate text-left"
                 >
                   {conv.title}
@@ -346,6 +557,16 @@ function ChatPage() {
         </div>
 
         <div className="panel relative flex min-h-[70vh] min-w-0 flex-col overflow-hidden lg:min-h-0 lg:h-[calc(100dvh-8.5rem)]">
+          <DatasetContextBar
+            edge="top"
+            ctx={dsState.ctx}
+            loading={dsState.loading}
+            error={dsState.error}
+            selection={selection}
+            onSelect={selectDataset}
+            truncatedRows={py?.truncated ? PY_MAX_ROWS : undefined}
+          />
+
           <div ref={threadRef} className="relative min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
             <ScrollTop target={threadRef} local />
             {!c && !pending && (
@@ -369,7 +590,7 @@ function ChatPage() {
                   <span className="mt-1 block text-[11px] text-subtle">.xlsx .xls .csv .json .txt .md</span>
                 </button>
                 <div className="mt-6 grid gap-2">
-                  {starters.map((s) => (
+                  {(dsState.ctx ? datasetStarters : starters).map((s) => (
                     <button
                       key={s}
                       onClick={() => submit(s)}
@@ -382,14 +603,19 @@ function ChatPage() {
               </div>
             )}
 
-            {messages?.map((m) => (
+            {messages?.map((m, idx) => (
               <div key={m.id} className={m.role === "user" ? "flex justify-end" : ""}>
                 {m.role === "user" ? (
                   <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl bg-primary px-4 py-2.5 text-sm text-primary-foreground">
                     {m.content}
                   </div>
                 ) : (
-                  <AssistantReply content={m.content} />
+                  <AssistantReply
+                    content={m.content}
+                    question={stripDatasetHeader(messages[idx - 1]?.content ?? "")}
+                    onRun={runInLab}
+                    onOpenLab={dsState.ctx ? openFullLab : undefined}
+                  />
                 )}
               </div>
             ))}
@@ -436,7 +662,7 @@ function ChatPage() {
             </div>
           )}
 
-          {!attachment && !sheetOptions && resumable && (
+          {!attachment && !sheetOptions && resumable && !selection && (
             <div className="flex items-center gap-2 border-t border-border bg-accent/40 px-4 py-2 text-xs">
               <Paperclip className="size-3.5 text-primary" />
               <span className="min-w-0 flex-1 truncate text-muted-foreground">
@@ -528,7 +754,7 @@ function ChatPage() {
                   submit(input);
                 }
               }}
-              placeholder={attachment ? `Ask about ${attachment.name}…` : "Ask about your data, or drop a file…"}
+              placeholder={dsState.ctx ? `Ask about ${dsState.ctx.displayName}...` : attachment ? `Ask about ${attachment.name}…` : "Ask about your data, or drop a file…"}
               className="max-h-28 min-h-[40px] flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none placeholder:text-subtle"
             />
             <button
@@ -547,7 +773,17 @@ function ChatPage() {
   );
 }
 
-function AssistantReply({ content }: { content: string }) {
+function AssistantReply({
+  content,
+  question,
+  onRun,
+  onOpenLab,
+}: {
+  content: string;
+  question: string;
+  onRun: (code: string, question: string) => void;
+  onOpenLab?: ((code: string, question: string) => void) | undefined;
+}) {
   const code = extractCodeBlocks(content)
     .map((b) => b.code)
     .join("\n\n");
@@ -563,11 +799,20 @@ function AssistantReply({ content }: { content: string }) {
             <CopyButton value={code} label="Copy all code" copiedLabel="Copied code" />
             <button
               type="button"
-              onClick={() => openPythonLab(code)}
+              onClick={() => onRun(code, question)}
               className="inline-flex items-center rounded-lg border border-border bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:border-primary hover:text-foreground"
             >
-              Run in lab
+              Run in PythonLab
             </button>
+            {onOpenLab ? (
+              <button
+                type="button"
+                onClick={() => onOpenLab(code, question)}
+                className="inline-flex items-center rounded-lg border border-border bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:border-primary hover:text-foreground"
+              >
+                Open in full PythonLab
+              </button>
+            ) : null}
           </>
         ) : null}
       </div>
