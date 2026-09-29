@@ -11,7 +11,16 @@ const title = "Sign in — DataSimplr Workspace";
 const description =
   "Sign in to your DataSimplr workspace to keep your AI chats, saved analyses and uploaded datasets in one place.";
 
+// Only same-site paths, so ?next= can't bounce users to another domain.
+function safeNext(value: unknown): string | undefined {
+  return typeof value === "string" && value.startsWith("/") && !value.startsWith("//") ? value : undefined;
+}
+
 export const Route = createFileRoute("/auth")({
+  validateSearch: (search: Record<string, unknown>): { next?: string | undefined; mode?: "signup" | undefined } => ({
+    next: safeNext(search["next"]),
+    mode: search["mode"] === "signup" ? "signup" : undefined,
+  }),
   head: () => ({
     meta: [
       { title },
@@ -27,7 +36,9 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const search = Route.useSearch();
+  const next = search.next ?? "/dashboard";
+  const [mode, setMode] = useState<"signin" | "signup">(search.mode ?? "signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,15 +48,15 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard", replace: true });
+      if (data.session) navigate({ href: next, replace: true });
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
-        navigate({ to: "/dashboard", replace: true });
+        navigate({ href: next, replace: true });
       }
     });
     return () => sub.subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, next]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +68,7 @@ function AuthPage() {
           email,
           password,
           options: {
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: `${window.location.origin}${next}`,
             data: { display_name: name.trim() || email.split("@")[0] },
           },
         });

@@ -5,6 +5,10 @@ import type { Tables } from "@/integrations/supabase/types";
 
 export const DATASET_BUCKET = "datasets";
 
+export class QuotaError extends Error {
+  override name = "QuotaError";
+}
+
 export type DatasetRow = Tables<"datasets">;
 export type DatasetVersionRow = Tables<"dataset_versions">;
 export type CleaningLogRow = Tables<"dataset_cleaning_log">;
@@ -33,7 +37,17 @@ export async function saveDataset(params: {
     ...(params.file.type ? { contentType: params.file.type } : {}),
     upsert: false,
   });
-  if (uploadErr) throw uploadErr;
+  if (uploadErr) {
+    // Storage reports policy rejections (the storage-quota check) as 403 / "row-level security".
+    if (/row-level security|unauthorized|exceeded the maximum/i.test(uploadErr.message)) {
+      throw new QuotaError("Your plan's storage or file-size limit was reached.");
+    }
+    throw uploadErr;
+  }
+
+  // If the metadata insert is rejected (e.g. the plan quota policy), don't
+  // leave an orphaned file behind in Storage counting against the quota.
+  const removeUpload = () => supabase.storage.from(DATASET_BUCKET).remove([storageKey]);
 
   const { error: dsErr } = await supabase.from("datasets").insert({
     id: datasetId,
@@ -46,7 +60,11 @@ export async function saveDataset(params: {
     column_count: params.columnCount,
     status: "uploaded",
   });
-  if (dsErr) throw dsErr;
+  if (dsErr) {
+    await removeUpload();
+    // 42501 = row-level security violation: the quota check in the insert policy.
+    throw dsErr.code === "42501" ? new QuotaError("Your plan's dataset limit was reached.") : dsErr;
+  }
 
   const { error: verErr } = await supabase.from("dataset_versions").insert({
     id: versionId,

@@ -4,7 +4,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { WorkspaceShell } from "@/components/workspace/shell";
 import { AnalyticsStudio } from "@/components/workspace/analytics-studio";
-import { getDataset, getVersion, loadDatasetTable, saveDataset } from "@/lib/dataset-library";
+import { QuotaError, getDataset, getVersion, loadDatasetTable, saveDataset } from "@/lib/dataset-library";
+import { useUpgrade } from "@/components/billing/upgrade";
+import { checkDatasetQuota, useEntitlements, useRefreshEntitlements } from "@/lib/entitlements";
+import { PLAN_LIMITS, QUOTA_MESSAGES, formatBytes, type QuotaReason } from "@/lib/plans";
 import type { Table } from "@/lib/analysis";
 
 export const Route = createFileRoute("/_authenticated/analyze")({
@@ -32,6 +35,19 @@ function AnalyzePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { dataset: datasetId } = Route.useSearch();
+  const upgrade = useUpgrade();
+  const { data: ent } = useEntitlements();
+  const refreshEntitlements = useRefreshEntitlements();
+
+  const promptUpgrade = (reason: QuotaReason, fileSize: number) => {
+    const detail =
+      reason === "file_too_large"
+        ? `This file is ${formatBytes(fileSize)}; your plan allows up to ${formatBytes(ent?.limits.maxFileBytes ?? 0)}. Plus handles ${formatBytes(PLAN_LIMITS.plus.maxFileBytes)}, Pro ${formatBytes(PLAN_LIMITS.pro.maxFileBytes)}.`
+        : reason === "monthly_limit"
+          ? "Your analysis is still here — upgrade and save it straight away. Plus saves 30 datasets a month, Pro is unlimited."
+          : "Upgrade for more room — Plus has 2 GB, Pro 10 GB.";
+    upgrade.open({ title: QUOTA_MESSAGES[reason], reason: detail });
+  };
   const [initialDataset, setInitialDataset] = useState<
     { table: Table; sourceName: string; sourceFile: File; sheetName: string | null } | null
   >(null);
@@ -65,16 +81,35 @@ function AnalyzePage() {
       {loadError && <p className="mb-4 text-sm text-destructive">{loadError}</p>}
       <AnalyticsStudio
         initialDataset={initialDataset}
+        insightLimit={ent?.enforced && ent.plan === "free" ? PLAN_LIMITS.free.insightPreview : null}
+        onUnlockInsights={() =>
+          upgrade.open({
+            title: "See every insight",
+            reason: "Free shows the top 3 insights. Plus and Pro show the full list for every dataset.",
+          })
+        }
         onSaveDataset={async (payload) => {
+          const reason = await checkDatasetQuota(payload.file.size);
+          if (reason) {
+            promptUpgrade(reason, payload.file.size);
+            throw new Error(QUOTA_MESSAGES[reason]);
+          }
           const { data: auth } = await supabase.auth.getUser();
-          await saveDataset({
-            userId: auth.user!.id,
-            file: payload.file,
-            name: payload.name,
-            rowCount: payload.rowCount,
-            columnCount: payload.columnCount,
-            sheetName: payload.sheetName ?? null,
-          });
+          try {
+            await saveDataset({
+              userId: auth.user!.id,
+              file: payload.file,
+              name: payload.name,
+              rowCount: payload.rowCount,
+              columnCount: payload.columnCount,
+              sheetName: payload.sheetName ?? null,
+            });
+          } catch (e) {
+            if (e instanceof QuotaError) promptUpgrade("monthly_limit", payload.file.size);
+            throw e;
+          } finally {
+            refreshEntitlements();
+          }
           queryClient.invalidateQueries({ queryKey: ["datasets"] });
         }}
         onSave={async (payload) => {

@@ -1,4 +1,15 @@
 import { Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import {
+  PLAN_COPY,
+  PRICES,
+  REPORT_PASS_PRICE,
+  formatPrice,
+  guessCurrency,
+  monthlyEquivalent,
+  type BillingInterval,
+  type Currency,
+} from "@/lib/plans";
 import {
   AlertTriangle,
   ArrowRight,
@@ -337,39 +348,13 @@ export function UseCases() {
   );
 }
 
-const plans = [
-  {
-    name: "Starter",
-    price: "$0",
-    note: "For first questions",
-    features: ["3 files per month", "Natural language chat", "Core visualizations"],
-    cta: "Start free",
-    featured: false,
-  },
-  {
-    name: "Pro",
-    price: "$29",
-    note: "Per user / month",
-    features: [
-      "Unlimited uploads",
-      "Advanced anomaly detection",
-      "Shareable insight reports",
-      "Priority AI analysis",
-    ],
-    cta: "Start Analyzing →",
-    featured: true,
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    note: "For data teams",
-    features: ["SSO & access controls", "Private deployment", "Audit logs", "Dedicated support"],
-    cta: "Talk to us",
-    featured: false,
-  },
-];
+const planOrder = ["free", "plus", "pro", "team"] as const;
 
 export function Pricing() {
+  const [interval, setBillingInterval] = useState<BillingInterval>("year");
+  const [currency, setCurrency] = useState<Currency>("USD");
+  useEffect(() => setCurrency(guessCurrency()), []);
+
   return (
     <section id="pricing" className="border-t border-border py-24">
       <div className="mx-auto max-w-7xl px-5 lg:px-8">
@@ -377,50 +362,110 @@ export function Pricing() {
           eyebrow="Pricing"
           title="Simple Plans."
           accent="Serious Analysis."
-          copy="Start free. Upgrade when your questions get bigger."
+          copy="Every new account gets 7 days of Pro free — no card needed. Pay with UPI, cards or netbanking; nothing auto-renews."
         />
-        <div className="mt-14 grid gap-5 lg:grid-cols-3">
-          {plans.map((p) => (
-            <div
-              key={p.name}
-              className="panel flex flex-col p-7"
-              style={
-                p.featured
-                  ? { borderColor: "var(--primary)", boxShadow: "0 36px 80px -50px var(--glow)" }
-                  : undefined
-              }
-            >
-              <div className="flex items-center justify-between">
-                <p className="font-mono text-[10px] uppercase tracking-widest text-subtle">{p.name}</p>
-                {p.featured && (
-                  <span className="rounded-full bg-accent px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-accent-foreground">
-                    Popular
-                  </span>
-                )}
-              </div>
-              <p className="mt-5 font-display text-4xl font-bold">{p.price}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{p.note}</p>
-              <ul className="mt-6 flex-1 space-y-3">
-                {p.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                    <Check className="mt-0.5 size-4 shrink-0 text-primary" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <Link
-                to={p.name === "Enterprise" ? "/auth" : "/try"}
-                className={`mt-7 rounded-xl px-5 py-3 text-center text-sm font-semibold transition-transform hover:-translate-y-0.5 ${
-                  p.featured
-                    ? "bg-primary text-primary-foreground"
-                    : "border border-border bg-muted text-foreground"
-                }`}
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+          <div className="inline-flex rounded-xl border border-border bg-muted p-1 text-xs font-semibold">
+            {(
+              [
+                { key: "month", label: "Monthly" },
+                { key: "year", label: "Yearly · 2 months free" },
+              ] as const
+            ).map((o) => (
+              <button
+                key={o.key}
+                type="button"
+                onClick={() => setBillingInterval(o.key)}
+                className={`rounded-lg px-3 py-1.5 ${interval === o.key ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
               >
-                {p.cta}
-              </Link>
-            </div>
-          ))}
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <div className="inline-flex rounded-lg border border-border bg-muted p-0.5 text-[11px] font-semibold">
+            {(["INR", "USD"] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCurrency(c)}
+                className={`rounded-md px-2.5 py-1 ${currency === c ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
+              >
+                {c === "INR" ? "₹ INR" : "$ USD"}
+              </button>
+            ))}
+          </div>
         </div>
+        <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+          {planOrder.map((key) => {
+            const featured = key === "pro";
+            const copy = PLAN_COPY[key];
+            const price = key === "free" ? formatPrice(0, currency) : formatPrice(monthlyEquivalent(key, currency, interval), currency);
+            const note =
+              key === "free"
+                ? "Forever"
+                : key === "team"
+                  ? "Per seat / month · min 3 seats"
+                  : interval === "year"
+                    ? `Per month · ${formatPrice(PRICES[key][currency].year, currency)} billed yearly`
+                    : "Per month";
+            return (
+              <div
+                key={key}
+                className="panel flex flex-col p-7"
+                style={featured ? { borderColor: "var(--primary)", boxShadow: "0 36px 80px -50px var(--glow)" } : undefined}
+              >
+                <div className="flex items-center justify-between">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-subtle">{copy.name}</p>
+                  {featured && (
+                    <span className="rounded-full bg-accent px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-accent-foreground">
+                      Most popular
+                    </span>
+                  )}
+                </div>
+                <p className="mt-5 font-display text-4xl font-bold">{price}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{note}</p>
+                <ul className="mt-6 flex-1 space-y-3">
+                  {copy.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                      <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to="/auth"
+                  search={{ mode: "signup", next: key === "free" ? "/dashboard" : key === "team" ? "/team" : "/billing" }}
+                  className={`mt-7 rounded-xl px-5 py-3 text-center text-sm font-semibold transition-transform hover:-translate-y-0.5 ${
+                    featured ? "bg-primary text-primary-foreground" : "border border-border bg-muted text-foreground"
+                  }`}
+                >
+                  {key === "free" ? "Start free" : key === "team" ? "Start 14-day team trial" : featured ? "Try Pro free for 7 days →" : `Get ${copy.name}`}
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-5 grid gap-5 md:grid-cols-2">
+          <div className="panel flex items-center justify-between gap-4 p-5">
+            <div>
+              <p className="text-sm font-semibold">Report Pass — {formatPrice(REPORT_PASS_PRICE[currency], currency)}</p>
+              <p className="text-xs text-muted-foreground">One report, every finding, clean export. No subscription.</p>
+            </div>
+            <Link to="/try" className="shrink-0 text-sm font-semibold text-primary">
+              Try it →
+            </Link>
+          </div>
+          <div className="panel flex items-center justify-between gap-4 p-5">
+            <div>
+              <p className="text-sm font-semibold">Enterprise</p>
+              <p className="text-xs text-muted-foreground">SSO, private deployment, audit logs, dedicated support.</p>
+            </div>
+            <a href="mailto:hello@datasimplr.com" className="shrink-0 text-sm font-semibold text-primary">
+              Talk to us →
+            </a>
+          </div>
+        </div>
+        <p className="mt-6 text-center text-xs text-muted-foreground">Cancel anytime — plans are one-time payments that never auto-renew.</p>
       </div>
     </section>
   );

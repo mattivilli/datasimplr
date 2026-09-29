@@ -15,10 +15,14 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as TryRouteImport } from './routes/try'
 import { Route as AuthenticatedAnalyzeRouteImport } from './routes/_authenticated/analyze'
+import { Route as AuthenticatedBillingRouteImport } from './routes/_authenticated/billing'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedLabRouteImport } from './routes/_authenticated/lab'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedTeamRouteImport } from './routes/_authenticated/team'
+import { Route as ApiRazorpayWebhookRouteImport } from './routes/api.razorpay-webhook'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as AuthenticatedAnalysesIndexRouteImport } from './routes/_authenticated/analyses.index'
 import { Route as AuthenticatedAnalysesIdRouteImport } from './routes/_authenticated/analyses.$id'
 import { Route as AuthenticatedDatasetsIndexRouteImport } from './routes/_authenticated/datasets.index'
@@ -53,6 +57,11 @@ const AuthenticatedAnalyzeRoute = AuthenticatedAnalyzeRouteImport.update({
   path: '/analyze',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedBillingRoute = AuthenticatedBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
   id: '/chat',
   path: '/chat',
@@ -72,6 +81,21 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTeamRoute = AuthenticatedTeamRouteImport.update({
+  id: '/team',
+  path: '/team',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const ApiRazorpayWebhookRoute = ApiRazorpayWebhookRouteImport.update({
+  id: '/api/razorpay-webhook',
+  path: '/api/razorpay-webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAnalysesIndexRoute =
   AuthenticatedAnalysesIndexRouteImport.update({
@@ -102,10 +126,14 @@ export interface FileRoutesByFullPath {
   '/help': typeof HelpRoute
   '/try': typeof TryRoute
   '/analyze': typeof AuthenticatedAnalyzeRoute
+  '/billing': typeof AuthenticatedBillingRoute
   '/chat': typeof AuthenticatedChatRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/lab': typeof AuthenticatedLabRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/team': typeof AuthenticatedTeamRoute
+  '/api/razorpay-webhook': typeof ApiRazorpayWebhookRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/analyses/$id': typeof AuthenticatedAnalysesIdRoute
   '/datasets/$id': typeof AuthenticatedDatasetsIdRoute
   '/analyses/': typeof AuthenticatedAnalysesIndexRoute
@@ -117,10 +145,14 @@ export interface FileRoutesByTo {
   '/help': typeof HelpRoute
   '/try': typeof TryRoute
   '/analyze': typeof AuthenticatedAnalyzeRoute
+  '/billing': typeof AuthenticatedBillingRoute
   '/chat': typeof AuthenticatedChatRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/lab': typeof AuthenticatedLabRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/team': typeof AuthenticatedTeamRoute
+  '/api/razorpay-webhook': typeof ApiRazorpayWebhookRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/analyses/$id': typeof AuthenticatedAnalysesIdRoute
   '/datasets/$id': typeof AuthenticatedDatasetsIdRoute
   '/analyses': typeof AuthenticatedAnalysesIndexRoute
@@ -134,10 +166,14 @@ export interface FileRoutesById {
   '/help': typeof HelpRoute
   '/try': typeof TryRoute
   '/_authenticated/analyze': typeof AuthenticatedAnalyzeRoute
+  '/_authenticated/billing': typeof AuthenticatedBillingRoute
   '/_authenticated/chat': typeof AuthenticatedChatRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/lab': typeof AuthenticatedLabRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/team': typeof AuthenticatedTeamRoute
+  '/api/razorpay-webhook': typeof ApiRazorpayWebhookRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/_authenticated/analyses/$id': typeof AuthenticatedAnalysesIdRoute
   '/_authenticated/datasets/$id': typeof AuthenticatedDatasetsIdRoute
   '/_authenticated/analyses/': typeof AuthenticatedAnalysesIndexRoute
@@ -151,10 +187,14 @@ export interface FileRouteTypes {
     | '/help'
     | '/try'
     | '/analyze'
+    | '/billing'
     | '/chat'
     | '/dashboard'
     | '/lab'
     | '/settings'
+    | '/team'
+    | '/api/razorpay-webhook'
+    | '/invite/$token'
     | '/analyses/$id'
     | '/datasets/$id'
     | '/analyses/'
@@ -166,10 +206,14 @@ export interface FileRouteTypes {
     | '/help'
     | '/try'
     | '/analyze'
+    | '/billing'
     | '/chat'
     | '/dashboard'
     | '/lab'
     | '/settings'
+    | '/team'
+    | '/api/razorpay-webhook'
+    | '/invite/$token'
     | '/analyses/$id'
     | '/datasets/$id'
     | '/analyses'
@@ -182,10 +226,14 @@ export interface FileRouteTypes {
     | '/help'
     | '/try'
     | '/_authenticated/analyze'
+    | '/_authenticated/billing'
     | '/_authenticated/chat'
     | '/_authenticated/dashboard'
     | '/_authenticated/lab'
     | '/_authenticated/settings'
+    | '/_authenticated/team'
+    | '/api/razorpay-webhook'
+    | '/invite/$token'
     | '/_authenticated/analyses/$id'
     | '/_authenticated/datasets/$id'
     | '/_authenticated/analyses/'
@@ -198,6 +246,8 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   HelpRoute: typeof HelpRoute
   TryRoute: typeof TryRoute
+  ApiRazorpayWebhookRoute: typeof ApiRazorpayWebhookRoute
+  InviteTokenRoute: typeof InviteTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -244,6 +294,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAnalyzeRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/billing': {
+      id: '/_authenticated/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof AuthenticatedBillingRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/chat': {
       id: '/_authenticated/chat'
       path: '/chat'
@@ -271,6 +328,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/team': {
+      id: '/_authenticated/team'
+      path: '/team'
+      fullPath: '/team'
+      preLoaderRoute: typeof AuthenticatedTeamRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/razorpay-webhook': {
+      id: '/api/razorpay-webhook'
+      path: '/api/razorpay-webhook'
+      fullPath: '/api/razorpay-webhook'
+      preLoaderRoute: typeof ApiRazorpayWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/analyses/': {
       id: '/_authenticated/analyses/'
@@ -305,10 +383,12 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAnalyzeRoute: typeof AuthenticatedAnalyzeRoute
+  AuthenticatedBillingRoute: typeof AuthenticatedBillingRoute
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedLabRoute: typeof AuthenticatedLabRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedTeamRoute: typeof AuthenticatedTeamRoute
   AuthenticatedAnalysesIdRoute: typeof AuthenticatedAnalysesIdRoute
   AuthenticatedDatasetsIdRoute: typeof AuthenticatedDatasetsIdRoute
   AuthenticatedAnalysesIndexRoute: typeof AuthenticatedAnalysesIndexRoute
@@ -317,10 +397,12 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAnalyzeRoute: AuthenticatedAnalyzeRoute,
+  AuthenticatedBillingRoute: AuthenticatedBillingRoute,
   AuthenticatedChatRoute: AuthenticatedChatRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedLabRoute: AuthenticatedLabRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedTeamRoute: AuthenticatedTeamRoute,
   AuthenticatedAnalysesIdRoute: AuthenticatedAnalysesIdRoute,
   AuthenticatedDatasetsIdRoute: AuthenticatedDatasetsIdRoute,
   AuthenticatedAnalysesIndexRoute: AuthenticatedAnalysesIndexRoute,
@@ -336,6 +418,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   HelpRoute: HelpRoute,
   TryRoute: TryRoute,
+  ApiRazorpayWebhookRoute: ApiRazorpayWebhookRoute,
+  InviteTokenRoute: InviteTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

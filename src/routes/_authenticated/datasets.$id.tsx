@@ -11,7 +11,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { WorkspaceShell } from "@/components/workspace/shell";
+import { WorkspaceShell, useProfile } from "@/components/workspace/shell";
 import { Button } from "@/components/ui/button";
 import type { Table } from "@/lib/analysis";
 import { analyzeQuality, applyIssue, type QualityIssue, type QualityReport } from "@/lib/data-quality";
@@ -59,6 +59,7 @@ function DatasetWorkspace() {
   const [finalizing, setFinalizing] = useState(false);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [undoing, setUndoing] = useState(false);
+  const { data: profile } = useProfile();
 
   const load = async () => {
     setLoading(true);
@@ -264,6 +265,10 @@ function DatasetWorkspace() {
 
   if (!dataset || !table || !report) return null;
 
+  // Teammates can open, analyze and chat on a shared dataset, but cleaning
+  // writes versions into the owner's storage, so it stays owner-only.
+  const readOnly = !!profile && dataset.user_id !== profile.id;
+
   const visibleIssues = report.issues.filter((i) => !ignored.has(i.id));
   const safeIssues = visibleIssues.filter((i) => i.severity === "safe");
   const reviewIssues = visibleIssues.filter((i) => i.severity === "review");
@@ -294,6 +299,12 @@ function DatasetWorkspace() {
         </div>
       }
     >
+      {readOnly && (
+        <p className="mb-4 rounded-xl border border-border bg-accent/40 px-4 py-3 text-sm">
+          Shared by a teammate — you can analyze, chat and download it. Only the owner can clean or finalize it.
+        </p>
+      )}
+      <fieldset disabled={readOnly} className="min-w-0">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-5">
           {error && <p className="text-sm text-destructive">{error}</p>}
@@ -437,6 +448,7 @@ function DatasetWorkspace() {
           </div>
         </div>
       </div>
+      </fieldset>
     </WorkspaceShell>
   );
 }

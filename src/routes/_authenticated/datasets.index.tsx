@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Database, Download, Loader2, MessageSquare, SquareArrowOutUpRight, Sparkles, Terminal } from "lucide-react";
-import { WorkspaceShell } from "@/components/workspace/shell";
+import { WorkspaceShell, useProfile } from "@/components/workspace/shell";
+import { TeamShareSelect } from "@/components/billing/team-share-select";
 import { Button } from "@/components/ui/button";
 import { downloadDatasetFile, getVersion, listDatasetsWithCurrentVersion, type DatasetRow, type DatasetVersionRow } from "@/lib/dataset-library";
 
@@ -31,6 +32,8 @@ export const Route = createFileRoute("/_authenticated/datasets/")({
 });
 
 function DatasetsPage() {
+  const queryClient = useQueryClient();
+  const { data: profile } = useProfile();
   const { data, isLoading } = useQuery({
     queryKey: ["datasets"],
     queryFn: listDatasetsWithCurrentVersion,
@@ -87,6 +90,7 @@ function DatasetsPage() {
               <div className="min-w-0">
                 <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">
                   {STATUS_LABEL[d.status] ?? d.status}
+                  {profile && d.user_id !== profile.id && <span className="ml-2 text-primary">· Shared by teammate</span>}
                 </p>
                 <Link
                   to="/datasets/$id"
@@ -141,6 +145,17 @@ function DatasetsPage() {
                 Download
               </Button>
             </div>
+            {profile && d.user_id === profile.id && (
+              <div className="mt-3 max-w-xs">
+                <TeamShareSelect
+                  compact
+                  table="datasets"
+                  rowId={d.id}
+                  teamId={d.team_id}
+                  onChanged={() => queryClient.invalidateQueries({ queryKey: ["datasets"] })}
+                />
+              </div>
+            )}
           </div>
         ))}
       </div>

@@ -4,6 +4,7 @@ import {
   ClipboardPaste,
   DatabaseZap,
   Loader2,
+  Lock,
   Play,
   Sparkles,
   Upload,
@@ -78,10 +79,17 @@ export function AnalyticsStudio({
   onSave,
   onSaveDataset,
   initialDataset,
+  insightLimit = null,
+  onUnlockInsights,
+  unlockLabel = "Unlock all findings",
 }: {
   onSave?: (payload: SavePayload) => Promise<void>;
   onSaveDataset?: (payload: SaveDatasetPayload) => Promise<void>;
   initialDataset?: { table: Table; sourceName: string; sourceFile: File; sheetName?: string | null } | null;
+  // Show only the first N findings; the rest render blurred behind an unlock CTA.
+  insightLimit?: number | null;
+  onUnlockInsights?: () => void;
+  unlockLabel?: string;
 }) {
   const [mode, setMode] = useState<"upload" | "paste">("upload");
   const [text, setText] = useState(sample);
@@ -596,15 +604,12 @@ export function AnalyticsStudio({
 
         {(tool === "insights" || tool === "missing_values" || tool === "outliers" || tool === "trend" || tool === "segment") && (
           <div className="panel p-5">
-            <div className="space-y-2">
-              {(tool === "insights" ? insights : runTool(tool, table).findings.map((f) => `${f.label}: ${f.value}${f.note ? ` — ${f.note}` : ""}`)).map(
-                (line) => (
-                  <p key={line} className="rounded-xl border border-border bg-muted px-3 py-2 text-sm">
-                    {line}
-                  </p>
-                ),
-              )}
-            </div>
+            <FindingList
+              lines={tool === "insights" ? insights : runTool(tool, table).findings.map((f) => `${f.label}: ${f.value}${f.note ? ` — ${f.note}` : ""}`)}
+              limit={insightLimit}
+              onUnlock={onUnlockInsights}
+              unlockLabel={unlockLabel}
+            />
           </div>
         )}
 
@@ -650,6 +655,52 @@ export function AnalyticsStudio({
       </div>
     </div>
     </WithPythonSplit>
+  );
+}
+
+function FindingList({
+  lines,
+  limit,
+  onUnlock,
+  unlockLabel,
+}: {
+  lines: string[];
+  limit: number | null;
+  onUnlock?: (() => void) | undefined;
+  unlockLabel: string;
+}) {
+  const visible = limit === null ? lines : lines.slice(0, limit);
+  const hidden = limit === null ? [] : lines.slice(limit);
+  return (
+    <div className="space-y-2">
+      {visible.map((line) => (
+        <p key={line} className="rounded-xl border border-border bg-muted px-3 py-2 text-sm">
+          {line}
+        </p>
+      ))}
+      {hidden.length > 0 && (
+        <div className="relative">
+          {/* Real findings, blurred and unselectable — the count is honest. */}
+          <div aria-hidden className="pointer-events-none select-none space-y-2 blur-[5px]">
+            {hidden.map((line) => (
+              <p key={line} className="rounded-xl border border-border bg-muted px-3 py-2 text-sm">
+                {line}
+              </p>
+            ))}
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <button
+              type="button"
+              onClick={onUnlock}
+              className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_12px_32px_-12px_var(--glow)]"
+            >
+              <Lock className="size-4" />
+              {hidden.length} more finding{hidden.length === 1 ? "" : "s"} — {unlockLabel}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -23,6 +23,7 @@ export type Database = {
           source_type: string
           status: string
           summary: string | null
+          team_id: string | null
           title: string
           tool: string
           updated_at: string
@@ -36,6 +37,7 @@ export type Database = {
           source_type?: string
           status?: string
           summary?: string | null
+          team_id?: string | null
           title: string
           tool?: string
           updated_at?: string
@@ -49,6 +51,7 @@ export type Database = {
           source_type?: string
           status?: string
           summary?: string | null
+          team_id?: string | null
           title?: string
           tool?: string
           updated_at?: string
@@ -68,6 +71,7 @@ export type Database = {
           original_filename: string | null
           row_count: number | null
           status: string
+          team_id: string | null
           updated_at: string
           user_id: string
         }
@@ -82,6 +86,7 @@ export type Database = {
           original_filename?: string | null
           row_count?: number | null
           status?: string
+          team_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -96,6 +101,7 @@ export type Database = {
           original_filename?: string | null
           row_count?: number | null
           status?: string
+          team_id?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -326,12 +332,235 @@ export type Database = {
         }
         Relationships: []
       }
+      report_credits: {
+        Row: {
+          amount: number | null
+          analysis_id: string | null
+          consumed_at: string | null
+          created_at: string
+          currency: string | null
+          id: string
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount?: number | null
+          analysis_id?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number | null
+          analysis_id?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          amount: number | null
+          billing_interval: string | null
+          created_at: string
+          currency: string | null
+          id: string
+          period_end: string
+          period_start: string
+          plan: string
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          seats: number | null
+          source: string
+          team_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount?: number | null
+          billing_interval?: string | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          period_end: string
+          period_start?: string
+          plan: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          seats?: number | null
+          source: string
+          team_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number | null
+          billing_interval?: string | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          period_end?: string
+          period_start?: string
+          plan?: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          seats?: number | null
+          source?: string
+          team_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      team_invites: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          role: string
+          team_id: string
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by: string
+          role?: string
+          team_id: string
+          token?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          role?: string
+          team_id?: string
+          token?: string
+        }
+        Relationships: []
+      }
+      team_members: {
+        Row: {
+          created_at: string
+          role: string
+          team_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          role?: string
+          team_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          role?: string
+          team_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      teams: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      usage_events: {
+        Row: {
+          created_at: string
+          id: number
+          kind: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          kind: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          kind?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      accept_team_invite: { Args: { _token: string }; Returns: string }
+      can_read_dataset: { Args: { _dataset: string }; Returns: boolean }
+      check_dataset_quota: { Args: { _file_size: number }; Returns: string | null }
+      get_entitlements: { Args: never; Returns: Json }
+      get_invite: {
+        Args: { _token: string }
+        Returns: {
+          accepted: boolean
+          email: string
+          expired: boolean
+          inviter_name: string
+          role: string
+          team_name: string
+        }[]
+      }
+      is_team_admin: { Args: { _team: string }; Returns: boolean }
+      is_team_member: { Args: { _team: string }; Returns: boolean }
+      my_plan: { Args: never; Returns: string }
+      redeem_report_credit: { Args: { _analysis: string }; Returns: undefined }
+      start_team_trial: { Args: { _team: string }; Returns: undefined }
+      start_trial: { Args: never; Returns: Json }
+      team_roster: {
+        Args: { _team: string }
+        Returns: {
+          display_name: string
+          email: string
+          joined_at: string
+          role: string
+          user_id: string
+        }[]
+      }
+      team_seats_available: { Args: { _team: string }; Returns: number }
     }
     Enums: {
       [_ in never]: never

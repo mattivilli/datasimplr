@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, ChevronLeft, ChevronRight, Database, FileText, HelpCircle, LogOut, Menu, MessageSquare, Settings, Upload, X } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, CreditCard, Database, FileText, HelpCircle, LogOut, Menu, MessageSquare, Settings, Upload, Users, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ds/theme-toggle";
 import { LogoMark } from "@/components/ds/logo";
 import { ScrollTop } from "@/components/workspace/scroll-top";
+import { PlanMeter } from "@/components/billing/plan-meter";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
@@ -13,6 +14,8 @@ const nav = [
   { to: "/analyze", label: "Upload & Analyze", icon: Upload },
   { to: "/datasets", label: "My Datasets", icon: Database },
   { to: "/analyses", label: "Past Analyses", icon: FileText },
+  { to: "/team", label: "Team", icon: Users },
+  { to: "/billing", label: "Plan & Billing", icon: CreditCard },
   { to: "/settings", label: "Settings", icon: Settings },
   { to: "/help", label: "Help", icon: HelpCircle },
 ] as const;
@@ -85,7 +88,7 @@ export function WorkspaceShell({
         {!collapsed && <span className="font-display text-base font-bold tracking-tight">DataSimplr</span>}
       </Link>
 
-      <nav className="flex-1 space-y-1 px-2">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-2">
         {nav.map((item) => {
           const active = pathname === item.to || pathname.startsWith(`${item.to}/`);
           return (
@@ -107,6 +110,8 @@ export function WorkspaceShell({
           );
         })}
       </nav>
+
+      <PlanMeter collapsed={collapsed} />
 
       <div className="border-t border-border p-3">
         <div className="flex items-center gap-3 rounded-xl px-2 py-2">

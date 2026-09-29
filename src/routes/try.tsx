@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { PLAN_LIMITS } from "@/lib/plans";
 import { ThemeToggle } from "@/components/ds/theme-toggle";
 import { LogoMark } from "@/components/ds/logo";
 import { AnalyticsStudio } from "@/components/workspace/analytics-studio";
@@ -17,6 +18,7 @@ export const Route = createFileRoute("/try")({
 });
 
 function TryPage() {
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-xl">
@@ -45,10 +47,14 @@ function TryPage() {
           <h1 className="mt-2 font-display text-2xl font-bold sm:text-3xl">Analytics workspace</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
             Cleaning, descriptive stats, correlation, regression, k-means and PCA run locally in your
-            browser. Sign in when you want chats and analyses saved.
+            browser. Sign up free to save them — new accounts get 7 days of Pro.
           </p>
         </div>
-        <AnalyticsStudio />
+        <AnalyticsStudio
+          insightLimit={PLAN_LIMITS.free.insightPreview}
+          unlockLabel="sign up free to see them"
+          onUnlockInsights={() => navigate({ to: "/auth", search: { next: "/analyze", mode: "signup" } })}
+        />
       </main>
     </div>
   );
