@@ -2,9 +2,32 @@ import { Fragment, type ReactNode } from "react";
 import { CopyButton } from "./copy-button";
 import { openPythonLab } from "./with-python-split";
 
+function formatMathText(raw: string): string {
+  return raw
+    .replace(/\\left\(/g, "(")
+    .replace(/\\right\)/g, ")")
+    .replace(/\\left\[/g, "[")
+    .replace(/\\right\]/g, "]")
+    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, "($1 / $2)")
+    .replace(/\\gamma/g, "γ")
+    .replace(/\\Gamma/g, "Γ")
+    .replace(/\\alpha/g, "α")
+    .replace(/\\beta/g, "β")
+    .replace(/\\sigma/g, "σ")
+    .replace(/\\mu/g, "μ")
+    .replace(/\\chi/g, "χ")
+    .replace(/\\int_\{([^}]+)\}\^\{([^}]+)\}/g, "∫($1 to $2)")
+    .replace(/\\infty/g, "∞")
+    .replace(/\\quad/g, "   ")
+    .replace(/\\\,/g, " ")
+    .replace(/\\!/g, "")
+    .replace(/\\text\{([^}]+)\}/g, "$1")
+    .trim();
+}
+
 function inline(text: string): ReactNode[] {
   const parts: ReactNode[] = [];
-  const re = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
+  const re = /(\*\*[^*]+\*\*|`[^`]+`|\\\(.*?\\\)|\[[^\]]+\]\([^)]+\))/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
@@ -21,6 +44,13 @@ function inline(text: string): ReactNode[] {
       parts.push(
         <code key={i++} className="rounded bg-background/80 px-1 py-0.5 font-mono text-[11px] text-primary">
           {token.slice(1, -1)}
+        </code>,
+      );
+    } else if (token.startsWith("\\(")) {
+      const innerMath = token.slice(2, -2);
+      parts.push(
+        <code key={i++} className="rounded border border-primary/20 bg-accent/50 px-1.5 py-0.5 font-mono text-[11px] text-primary">
+          {formatMathText(innerMath)}
         </code>,
       );
     } else {
@@ -61,6 +91,46 @@ export function MarkdownMessage({ content }: { content: string }) {
 
   while (i < lines.length) {
     const line = lines[i]!;
+
+    if (line.trim().startsWith("\\[") || line.trim().startsWith("$$")) {
+      const isSquare = line.trim().startsWith("\\[");
+      const delimiter = isSquare ? "\\]" : "$$";
+      const mathLines: string[] = [];
+      let rawText = line.trim().replace(/^\\\[|^\$\$/, "");
+
+      if (rawText.includes(delimiter)) {
+        rawText = rawText.replace(/\\\]|\$\$/, "").trim();
+        i += 1;
+      } else {
+        i += 1;
+        while (i < lines.length && !lines[i]!.includes(delimiter)) {
+          mathLines.push(lines[i]!);
+          i += 1;
+        }
+        if (i < lines.length) {
+          mathLines.push(lines[i]!.replace(/\\\]|\$\$/, ""));
+          i += 1;
+        }
+        rawText = (rawText + "\n" + mathLines.join("\n")).trim();
+      }
+
+      const formatted = formatMathText(rawText);
+
+      blocks.push(
+        <div key={k++} className="my-2.5 overflow-x-auto rounded-xl border border-primary/25 bg-muted/60 p-3.5 shadow-sm">
+          <div className="mb-2 flex items-center justify-between border-b border-border/50 pb-1.5">
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-primary">
+              Formula / Equation
+            </span>
+            <CopyButton value={rawText} label="Copy LaTeX" copiedLabel="Copied LaTeX" />
+          </div>
+          <p className="text-center font-mono text-xs leading-relaxed text-foreground sm:text-sm">
+            {formatted}
+          </p>
+        </div>,
+      );
+      continue;
+    }
 
     if (line.startsWith("```")) {
       const lang = line.slice(3).trim();
@@ -190,6 +260,8 @@ export function MarkdownMessage({ content }: { content: string }) {
       !/^\s*[-*]\s/.test(lines[i]!) &&
       !/^\s*\d+\.\s/.test(lines[i]!) &&
       !lines[i]!.startsWith("```") &&
+      !lines[i]!.trim().startsWith("\\[") &&
+      !lines[i]!.trim().startsWith("$$") &&
       !lines[i]!.trim().startsWith("|")
     ) {
       para.push(lines[i]!);
