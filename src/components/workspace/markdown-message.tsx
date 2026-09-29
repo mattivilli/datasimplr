@@ -1,28 +1,19 @@
 import { Fragment, type ReactNode } from "react";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import { CopyButton } from "./copy-button";
 import { openPythonLab } from "./with-python-split";
 
-function formatMathText(raw: string): string {
-  return raw
-    .replace(/\\left\(/g, "(")
-    .replace(/\\right\)/g, ")")
-    .replace(/\\left\[/g, "[")
-    .replace(/\\right\]/g, "]")
-    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, "($1 / $2)")
-    .replace(/\\gamma/g, "γ")
-    .replace(/\\Gamma/g, "Γ")
-    .replace(/\\alpha/g, "α")
-    .replace(/\\beta/g, "β")
-    .replace(/\\sigma/g, "σ")
-    .replace(/\\mu/g, "μ")
-    .replace(/\\chi/g, "χ")
-    .replace(/\\int_\{([^}]+)\}\^\{([^}]+)\}/g, "∫($1 to $2)")
-    .replace(/\\infty/g, "∞")
-    .replace(/\\quad/g, "   ")
-    .replace(/\\\,/g, " ")
-    .replace(/\\!/g, "")
-    .replace(/\\text\{([^}]+)\}/g, "$1")
-    .trim();
+function renderMath(latex: string, displayMode: boolean): ReactNode {
+  try {
+    const html = katex.renderToString(latex.trim(), {
+      displayMode,
+      throwOnError: false,
+    });
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  } catch {
+    return <code className="font-mono text-xs">{latex}</code>;
+  }
 }
 
 function inline(text: string): ReactNode[] {
@@ -49,9 +40,9 @@ function inline(text: string): ReactNode[] {
     } else if (token.startsWith("\\(")) {
       const innerMath = token.slice(2, -2);
       parts.push(
-        <code key={i++} className="rounded border border-primary/20 bg-accent/50 px-1.5 py-0.5 font-mono text-[11px] text-primary">
-          {formatMathText(innerMath)}
-        </code>,
+        <span key={i++} className="inline-flex items-center px-1">
+          {renderMath(innerMath, false)}
+        </span>,
       );
     } else {
       const label = token.slice(1, token.indexOf("]"));
@@ -114,19 +105,17 @@ export function MarkdownMessage({ content }: { content: string }) {
         rawText = (rawText + "\n" + mathLines.join("\n")).trim();
       }
 
-      const formatted = formatMathText(rawText);
-
       blocks.push(
-        <div key={k++} className="my-2.5 overflow-x-auto rounded-xl border border-primary/25 bg-muted/60 p-3.5 shadow-sm">
-          <div className="mb-2 flex items-center justify-between border-b border-border/50 pb-1.5">
+        <div key={k++} className="my-3 overflow-x-auto rounded-xl border border-border bg-card p-4 shadow-sm text-center">
+          <div className="mb-2 flex items-center justify-between border-b border-border/50 pb-2">
             <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-primary">
               Formula / Equation
             </span>
             <CopyButton value={rawText} label="Copy LaTeX" copiedLabel="Copied LaTeX" />
           </div>
-          <p className="text-center font-mono text-xs leading-relaxed text-foreground sm:text-sm">
-            {formatted}
-          </p>
+          <div className="py-2 overflow-x-auto text-foreground">
+            {renderMath(rawText, true)}
+          </div>
         </div>,
       );
       continue;
