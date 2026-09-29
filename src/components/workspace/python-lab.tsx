@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, Loader2, MessageSquareText, Play, Sparkles, Terminal, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { codeNeedsDataset, findBlocked, nextSteps, runPython, starterPython } from "@/lib/pyodide-runtime";
 import { loadActiveDataset, saveActiveDataset, subscribeDataset } from "@/lib/dataset-store";
 import { parseUploadedFile } from "@/lib/parse-file";
@@ -215,81 +216,97 @@ export function PythonLab({
         </Button>
       </div>
 
-      <textarea
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        spellCheck={false}
-        className="min-h-[120px] shrink-0 basis-[34%] resize-none bg-muted/50 p-3 font-mono text-[11px] leading-relaxed text-foreground outline-none"
-      />
+      <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
+        <ResizablePanel defaultSize={45} minSize={20} className="flex min-h-0 flex-col">
+          <textarea
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            spellCheck={false}
+            className="h-full w-full flex-1 resize-none bg-muted/50 p-3 font-mono text-[11px] leading-relaxed text-foreground outline-none"
+          />
 
-      <div className="shrink-0 border-t border-border px-3 py-2">
-        {needUpload && codeNeedsDataset(code) && (
-          <p className="mb-2 text-xs text-amber-500">
-            The dataset is not in memory. Upload the file again here — it is cached on this device for the lab.
-          </p>
-        )}
-        {warnings.length > 0 && !error && (
-          <p className="mb-2 flex items-start gap-2 text-xs text-amber-500">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-            {warnings[0]!.hint}
-          </p>
-        )}
-        {error && (
-          <div className="space-y-2">
-            <pre className="max-h-28 overflow-auto whitespace-pre-wrap rounded-lg border border-destructive/40 bg-destructive/10 p-2 font-mono text-[11px] text-destructive">
-              {error}
-            </pre>
-            <Button size="sm" variant="outline" onClick={askAi} disabled={fixing}>
-              {fixing ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Sparkles className="mr-1.5 size-3.5" />}
-              Ask AI to fix
-            </Button>
-            {aiNote && <p className="text-xs leading-relaxed text-muted-foreground">{aiNote}</p>}
-          </div>
-        )}
-        {!error && aiNote && <p className="text-xs leading-relaxed text-muted-foreground">{aiNote}</p>}
-      </div>
+          {(needUpload || warnings.length > 0 || error || aiNote) && (
+            <div className="max-h-32 shrink-0 overflow-y-auto border-t border-border bg-card px-3 py-2">
+              {needUpload && codeNeedsDataset(code) && (
+                <p className="mb-2 text-xs text-amber-500">
+                  The dataset is not in memory. Upload the file again here — it is cached on this device for the lab.
+                </p>
+              )}
+              {warnings.length > 0 && !error && (
+                <p className="mb-2 flex items-start gap-2 text-xs text-amber-500">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  {warnings[0]!.hint}
+                </p>
+              )}
+              {error && (
+                <div className="space-y-2">
+                  <pre className="max-h-24 overflow-auto whitespace-pre-wrap rounded-lg border border-destructive/40 bg-destructive/10 p-2 font-mono text-[11px] text-destructive">
+                    {error}
+                  </pre>
+                  <Button size="sm" variant="outline" onClick={askAi} disabled={fixing}>
+                    {fixing ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Sparkles className="mr-1.5 size-3.5" />}
+                    Ask AI to fix
+                  </Button>
+                  {aiNote && <p className="text-xs leading-relaxed text-muted-foreground">{aiNote}</p>}
+                </div>
+              )}
+              {!error && aiNote && <p className="text-xs leading-relaxed text-muted-foreground">{aiNote}</p>}
+            </div>
+          )}
+        </ResizablePanel>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {request && (
-          <p className="mb-2 rounded-lg border border-border bg-accent/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
-            <span className="font-semibold text-foreground">Request from Chat:</span> {request}
-          </p>
-        )}
-        <p className="font-mono text-[10px] uppercase tracking-widest text-subtle">{status}</p>
-        {onExplain && lastRun && (
-          <Button size="sm" variant="outline" className="mt-2" onClick={() => onExplain(lastRun)}>
-            <MessageSquareText className="mr-1.5 size-3.5" />
-            Explain in AI Chat
-          </Button>
-        )}
-        {stdout && (
-          <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-background p-2 font-mono text-[11px] text-muted-foreground">
-            {stdout}
-          </pre>
-        )}
-        {images.length > 0 && (
-          <div className="mt-3 grid gap-2">
-            {images.map((src, i) => (
-              <img
-                key={i}
-                alt={`Chart ${i + 1}`}
-                src={`data:image/png;base64,${src}`}
-                className="w-full rounded-xl border border-border bg-white"
-              />
-            ))}
+        <ResizableHandle withHandle className="cursor-row-resize bg-border/80 transition-colors hover:bg-primary" />
+
+        <ResizablePanel defaultSize={55} minSize={20} className="flex min-h-0 flex-col bg-card">
+          <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-muted/40 px-3 py-1.5">
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-subtle">
+              Output &amp; Visualizations
+            </span>
+            <span className="truncate font-mono text-[10px] text-subtle">{status}</span>
           </div>
-        )}
-        {steps.length > 0 && (
-          <div className="mt-3">
-            <p className="text-xs font-semibold">Next steps</p>
-            <ul className="mt-1.5 list-disc space-y-1 pl-4 text-xs leading-relaxed text-muted-foreground">
-              {steps.map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ul>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            {request && (
+              <p className="mb-2 rounded-lg border border-border bg-accent/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                <span className="font-semibold text-foreground">Request from Chat:</span> {request}
+              </p>
+            )}
+            {onExplain && lastRun && (
+              <Button size="sm" variant="outline" className="mb-2" onClick={() => onExplain(lastRun)}>
+                <MessageSquareText className="mr-1.5 size-3.5" />
+                Explain in AI Chat
+              </Button>
+            )}
+            {stdout && (
+              <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-background p-2 font-mono text-[11px] text-muted-foreground">
+                {stdout}
+              </pre>
+            )}
+            {images.length > 0 && (
+              <div className="mt-3 grid gap-2">
+                {images.map((src, i) => (
+                  <img
+                    key={i}
+                    alt={`Chart ${i + 1}`}
+                    src={`data:image/png;base64,${src}`}
+                    className="w-full rounded-xl border border-border bg-white"
+                  />
+                ))}
+              </div>
+            )}
+            {steps.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-semibold">Next steps</p>
+                <ul className="mt-1.5 list-disc space-y-1 pl-4 text-xs leading-relaxed text-muted-foreground">
+                  {steps.map((s) => (
+                    <li key={s}>{s}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       <button
         type="button"
@@ -303,3 +320,4 @@ export function PythonLab({
     </div>
   );
 }
+

@@ -217,10 +217,17 @@ function ChatPage() {
   });
 
   useEffect(() => {
-    const el = threadRef.current;
-    if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    if (nearBottom || pending) bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const scrollToReply = () => {
+      bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    };
+
+    scrollToReply();
+    const t1 = setTimeout(scrollToReply, 80);
+    const t2 = setTimeout(scrollToReply, 250);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [messages, pending]);
 
   useEffect(() => {
