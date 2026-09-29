@@ -59,108 +59,53 @@ export type Database = {
         }
         Relationships: []
       }
-      datasets: {
+      conversations: {
         Row: {
-          column_count: number | null
           created_at: string
-          current_version_id: string | null
-          file_size: number | null
-          file_type: string
+          dataset_id: string | null
+          dataset_version_id: string | null
           id: string
-          name: string
-          original_filename: string | null
-          row_count: number | null
-          status: string
-          team_id: string | null
+          kind: string
+          sheet_name: string | null
+          title: string
           updated_at: string
           user_id: string
         }
         Insert: {
-          column_count?: number | null
           created_at?: string
-          current_version_id?: string | null
-          file_size?: number | null
-          file_type?: string
+          dataset_id?: string | null
+          dataset_version_id?: string | null
           id?: string
-          name: string
-          original_filename?: string | null
-          row_count?: number | null
-          status?: string
-          team_id?: string | null
+          kind?: string
+          sheet_name?: string | null
+          title?: string
           updated_at?: string
           user_id: string
         }
         Update: {
-          column_count?: number | null
           created_at?: string
-          current_version_id?: string | null
-          file_size?: number | null
-          file_type?: string
+          dataset_id?: string | null
+          dataset_version_id?: string | null
           id?: string
-          name?: string
-          original_filename?: string | null
-          row_count?: number | null
-          status?: string
-          team_id?: string | null
+          kind?: string
+          sheet_name?: string | null
+          title?: string
           updated_at?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "datasets_current_version_fkey"
-            columns: ["current_version_id"]
-            isOneToOne: false
-            referencedRelation: "dataset_versions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      dataset_versions: {
-        Row: {
-          column_count: number | null
-          created_at: string
-          dataset_id: string
-          id: string
-          kind: string
-          quality_score: number | null
-          row_count: number | null
-          sheet_name: string | null
-          storage_key: string
-          user_id: string
-          version_number: number
-        }
-        Insert: {
-          column_count?: number | null
-          created_at?: string
-          dataset_id: string
-          id?: string
-          kind?: string
-          quality_score?: number | null
-          row_count?: number | null
-          sheet_name?: string | null
-          storage_key: string
-          user_id: string
-          version_number?: number
-        }
-        Update: {
-          column_count?: number | null
-          created_at?: string
-          dataset_id?: string
-          id?: string
-          kind?: string
-          quality_score?: number | null
-          row_count?: number | null
-          sheet_name?: string | null
-          storage_key?: string
-          user_id?: string
-          version_number?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "dataset_versions_dataset_id_fkey"
+            foreignKeyName: "conversations_dataset_id_fkey"
             columns: ["dataset_id"]
             isOneToOne: false
             referencedRelation: "datasets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_dataset_version_id_fkey"
+            columns: ["dataset_version_id"]
+            isOneToOne: false
+            referencedRelation: "dataset_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -222,51 +167,103 @@ export type Database = {
           },
         ]
       }
-      conversations: {
+      dataset_versions: {
         Row: {
+          column_count: number | null
           created_at: string
-          dataset_id: string | null
-          dataset_version_id: string | null
+          dataset_id: string
           id: string
           kind: string
+          quality_score: number | null
+          row_count: number | null
           sheet_name: string | null
-          title: string
-          updated_at: string
+          storage_key: string
           user_id: string
+          version_number: number
         }
         Insert: {
+          column_count?: number | null
           created_at?: string
-          dataset_id?: string | null
-          dataset_version_id?: string | null
+          dataset_id: string
           id?: string
           kind?: string
+          quality_score?: number | null
+          row_count?: number | null
           sheet_name?: string | null
-          title?: string
-          updated_at?: string
+          storage_key: string
           user_id: string
+          version_number?: number
         }
         Update: {
+          column_count?: number | null
           created_at?: string
-          dataset_id?: string | null
-          dataset_version_id?: string | null
+          dataset_id?: string
           id?: string
           kind?: string
+          quality_score?: number | null
+          row_count?: number | null
           sheet_name?: string | null
-          title?: string
-          updated_at?: string
+          storage_key?: string
           user_id?: string
+          version_number?: number
         }
         Relationships: [
           {
-            foreignKeyName: "conversations_dataset_id_fkey"
+            foreignKeyName: "dataset_versions_dataset_id_fkey"
             columns: ["dataset_id"]
             isOneToOne: false
             referencedRelation: "datasets"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      datasets: {
+        Row: {
+          column_count: number | null
+          created_at: string
+          current_version_id: string | null
+          file_size: number | null
+          file_type: string
+          id: string
+          name: string
+          original_filename: string | null
+          row_count: number | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          column_count?: number | null
+          created_at?: string
+          current_version_id?: string | null
+          file_size?: number | null
+          file_type?: string
+          id?: string
+          name: string
+          original_filename?: string | null
+          row_count?: number | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          column_count?: number | null
+          created_at?: string
+          current_version_id?: string | null
+          file_size?: number | null
+          file_type?: string
+          id?: string
+          name?: string
+          original_filename?: string | null
+          row_count?: number | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
           {
-            foreignKeyName: "conversations_dataset_version_id_fkey"
-            columns: ["dataset_version_id"]
+            foreignKeyName: "datasets_current_version_fkey"
+            columns: ["current_version_id"]
             isOneToOne: false
             referencedRelation: "dataset_versions"
             referencedColumns: ["id"]
