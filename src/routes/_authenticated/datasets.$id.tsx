@@ -30,6 +30,8 @@ import {
   type DatasetRow,
   type DatasetVersionRow,
 } from "@/lib/dataset-library";
+import { storedDatasetMode } from "@/lib/large-data/decide";
+import { LargeCleaningWorkspace } from "@/components/workspace/large-cleaning-workspace";
 
 export const Route = createFileRoute("/_authenticated/datasets/$id")({
   head: () => ({
@@ -59,6 +61,7 @@ function DatasetWorkspace() {
   const [finalizing, setFinalizing] = useState(false);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [undoing, setUndoing] = useState(false);
+  const [largeMode, setLargeMode] = useState(false);
   const { data: profile } = useProfile();
 
   const load = async () => {
@@ -70,6 +73,20 @@ function DatasetWorkspace() {
       const vs = await listVersions(id);
       const current = ds.current_version_id ? await getVersion(ds.current_version_id) : vs[0] ?? null;
       if (!current) throw new Error("This dataset has no stored version.");
+      const mode = storedDatasetMode({
+        file_type: current.kind === "original" ? ds.file_type : "csv",
+        file_size: current.kind === "original" ? ds.file_size : null,
+        row_count: current.row_count ?? ds.row_count,
+        column_count: current.column_count ?? ds.column_count,
+      });
+      if (mode === "large") {
+        setDataset(ds);
+        setVersions(vs);
+        setLargeMode(true);
+        setTable(null);
+        return;
+      }
+      setLargeMode(false);
       const { table: loaded } = await loadDatasetTable(ds, current);
       setDataset(ds);
       setVersions(vs);
@@ -259,6 +276,15 @@ function DatasetWorkspace() {
         <Button asChild className="mt-4" size="sm">
           <Link to="/datasets">Back to My Datasets</Link>
         </Button>
+      </WorkspaceShell>
+    );
+  }
+
+  if (dataset && largeMode) {
+    const ownerOnly = !!profile && dataset.user_id !== profile.id;
+    return (
+      <WorkspaceShell title={dataset.name} subtitle="Large dataset">
+        <LargeCleaningWorkspace dataset={dataset} initialVersions={versions} readOnly={ownerOnly} />
       </WorkspaceShell>
     );
   }

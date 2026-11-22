@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as DevBenchRouteImport } from './routes/dev-bench'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as TryRouteImport } from './routes/try'
 import { Route as AuthenticatedAnalyzeRouteImport } from './routes/_authenticated/analyze'
@@ -40,6 +41,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevBenchRoute = DevBenchRouteImport.update({
+  id: '/dev-bench',
+  path: '/dev-bench',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HelpRoute = HelpRouteImport.update({
@@ -123,6 +129,7 @@ const AuthenticatedDatasetsIdRoute = AuthenticatedDatasetsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/dev-bench': typeof DevBenchRoute
   '/help': typeof HelpRoute
   '/try': typeof TryRoute
   '/analyze': typeof AuthenticatedAnalyzeRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/dev-bench': typeof DevBenchRoute
   '/help': typeof HelpRoute
   '/try': typeof TryRoute
   '/analyze': typeof AuthenticatedAnalyzeRoute
@@ -163,6 +171,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/dev-bench': typeof DevBenchRoute
   '/help': typeof HelpRoute
   '/try': typeof TryRoute
   '/_authenticated/analyze': typeof AuthenticatedAnalyzeRoute
@@ -184,6 +193,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/dev-bench'
     | '/help'
     | '/try'
     | '/analyze'
@@ -203,6 +213,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/dev-bench'
     | '/help'
     | '/try'
     | '/analyze'
@@ -223,6 +234,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/dev-bench'
     | '/help'
     | '/try'
     | '/_authenticated/analyze'
@@ -244,6 +256,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  DevBenchRoute: typeof DevBenchRoute
   HelpRoute: typeof HelpRoute
   TryRoute: typeof TryRoute
   ApiRazorpayWebhookRoute: typeof ApiRazorpayWebhookRoute
@@ -271,6 +284,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev-bench': {
+      id: '/dev-bench'
+      path: '/dev-bench'
+      fullPath: '/dev-bench'
+      preLoaderRoute: typeof DevBenchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/help': {
@@ -416,6 +436,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  DevBenchRoute: DevBenchRoute,
   HelpRoute: HelpRoute,
   TryRoute: TryRoute,
   ApiRazorpayWebhookRoute: ApiRazorpayWebhookRoute,

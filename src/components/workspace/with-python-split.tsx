@@ -17,6 +17,7 @@ export function WithPythonSplit({
   columns,
   request,
   onExplain,
+  notice,
 }: {
   children: ReactNode;
   csv?: string | undefined;
@@ -24,6 +25,7 @@ export function WithPythonSplit({
   columns?: string[] | undefined;
   request?: string | undefined;
   onExplain?: ((result: ExplainPayload) => void) | undefined;
+  notice?: string | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const [seed, setSeed] = useState<string | undefined>();
@@ -70,7 +72,7 @@ export function WithPythonSplit({
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={44} minSize={30} className="min-h-0 min-w-0 overflow-hidden">
-              <PythonLab csv={csv} fileName={fileName} columns={columns} seedCode={seed} request={request} onExplain={onExplain} />
+              <PythonLab csv={csv} fileName={fileName} columns={columns} seedCode={seed} request={request} onExplain={onExplain} notice={notice} />
             </ResizablePanel>
           </ResizablePanelGroup>
         </div>
@@ -80,7 +82,7 @@ export function WithPythonSplit({
         <div className="flex min-w-0 flex-col">
           <div className="min-w-0 pb-[46vh]">{children}</div>
           <div className="fixed inset-x-0 bottom-0 z-40 h-[44vh] border-t border-border bg-background p-2 shadow-[0_-12px_40px_-24px_var(--glow)]">
-            <PythonLab csv={csv} fileName={fileName} columns={columns} seedCode={seed} request={request} onExplain={onExplain} />
+            <PythonLab csv={csv} fileName={fileName} columns={columns} seedCode={seed} request={request} onExplain={onExplain} notice={notice} />
           </div>
         </div>
       )}

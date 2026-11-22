@@ -7,6 +7,11 @@ export type StoredDataset = {
   fileName: string;
   columns: string[];
   savedAt: number;
+  /** Original uploaded file, so a refresh can reopen it without asking again. */
+  fileBlob?: Blob;
+  processing?: "standard" | "large";
+  /** Set when the last open was a working sample rather than the full file. */
+  sampleRows?: number;
 };
 
 function openDb(): Promise<IDBDatabase> {
@@ -34,8 +39,27 @@ export function subscribeDataset(fn: (d: StoredDataset | null) => void) {
   };
 }
 
-export async function saveActiveDataset(d: Omit<StoredDataset, "savedAt">) {
-  const row: StoredDataset = { ...d, savedAt: Date.now() };
+export async function saveActiveDataset(d: {
+  csv: string;
+  fileName: string;
+  columns: string[];
+  fileBlob?: Blob | null;
+  processing?: StoredDataset["processing"];
+  sampleRows?: number | null;
+}) {
+  const existing = await loadActiveDataset();
+  const fileBlob = d.fileBlob === null ? undefined : (d.fileBlob ?? existing?.fileBlob);
+  const processing = d.processing ?? existing?.processing;
+  const sampleRows = d.sampleRows === null ? undefined : (d.sampleRows ?? existing?.sampleRows);
+  const row: StoredDataset = {
+    csv: d.csv,
+    fileName: d.fileName,
+    columns: d.columns,
+    savedAt: Date.now(),
+    ...(fileBlob ? { fileBlob } : {}),
+    ...(processing ? { processing } : {}),
+    ...(sampleRows ? { sampleRows } : {}),
+  };
   try {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {

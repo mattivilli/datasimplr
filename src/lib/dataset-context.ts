@@ -1,5 +1,7 @@
 import { detectTypes, tableToCsv, type Table } from "./analysis";
 import { analyzeQuality } from "./data-quality";
+import { storedDatasetMode } from "./large-data/decide";
+import type { ColumnSummary, LargeQuality } from "./large-data/types";
 import {
   downloadVersionBlob,
   getCleaningLogForDataset,
@@ -37,6 +39,14 @@ export type ResolvedDatasetContext = {
   displayName: string;
   note: string | null;
   table: Table;
+  processing: "standard" | "large";
+  /** Row count of the stored dataset. For large files this is not preview length. */
+  fullRowCount: number;
+  largeSessionId: string | null;
+  sampleCsv: string | null;
+  sampleNote: string | null;
+  largeColumns: ColumnSummary[] | null;
+  largeQuality: LargeQuality | null;
 };
 
 const KIND_LABEL: Record<string, string> = { original: "Original", working: "Working", finalized: "Finalized" };
@@ -104,8 +114,51 @@ export async function resolveDatasetContext(sel: DatasetSelection): Promise<Reso
     note = `Cleaning covered the "${cleanedSheet}" sheet only, so the sheet "${sheetName}" is analysed from ${versionLabel(original)} (not cleaned).`;
   }
 
-  const table = await cachedTable(dataset, version, sheetName);
   const base = dataset.original_filename ?? dataset.name;
+  const displayName = sheetName ? `${base} — ${sheetName}` : dataset.name;
+  const mode = storedDatasetMode({
+    file_type: version.kind === "original" ? dataset.file_type : "csv",
+    file_size: version.kind === "original" ? dataset.file_size : null,
+    row_count: version.row_count ?? dataset.row_count,
+    column_count: version.column_count ?? dataset.column_count,
+  });
+
+  if (mode === "large") {
+    if (typeof window === "undefined") throw new Error("Open this dataset in the browser to analyse it.");
+    const blob = await cachedBlob(version);
+    const file = new File([blob], versionFilename(dataset, version), { type: blob.type || "text/csv" });
+    const engine = await import("./large-data/engine");
+    const info = await engine.openLargeFile(file, {
+      cacheKey: `${version.id}|${blob.size}|${version.row_count ?? ""}|${version.quality_score ?? ""}`,
+    });
+    const [report, first, sample] = await Promise.all([
+      engine.ensureQuality(info.id),
+      engine.previewPage(info.id, 0),
+      engine.sampleCsv(info.id),
+    ]);
+    return {
+      dataset,
+      versions,
+      requestedVersion: requested,
+      version,
+      versionLabel: versionLabel(version),
+      sheetName,
+      sheets,
+      cleanedSheet,
+      displayName,
+      note: sample.note || note,
+      table: { columns: first.columns, rows: first.rows },
+      processing: "large",
+      fullRowCount: info.rowCount,
+      largeSessionId: info.id,
+      sampleCsv: sample.csv,
+      sampleNote: sample.note || null,
+      largeColumns: info.columns,
+      largeQuality: report,
+    };
+  }
+
+  const table = await cachedTable(dataset, version, sheetName);
   return {
     dataset,
     versions,
@@ -115,26 +168,62 @@ export async function resolveDatasetContext(sel: DatasetSelection): Promise<Reso
     sheetName,
     sheets,
     cleanedSheet,
-    displayName: sheetName ? `${base} — ${sheetName}` : dataset.name,
+    displayName,
     note,
     table,
+    processing: "standard",
+    fullRowCount: table.rows.length,
+    largeSessionId: null,
+    sampleCsv: null,
+    sampleNote: null,
+    largeColumns: null,
+    largeQuality: null,
   };
 }
 
-export function pythonInputs(ctx: ResolvedDatasetContext) {
+export function pythonInputs(ctx: ResolvedDatasetContext): {
+  csv: string;
+  fileName: string;
+  columns: string[];
+  truncated: boolean;
+  sampleNote?: string;
+} {
+  if (ctx.processing === "large" && ctx.sampleCsv) {
+    return {
+      csv: ctx.sampleCsv,
+      fileName: ctx.displayName,
+      columns: ctx.table.columns,
+      truncated: false,
+      ...(ctx.sampleNote ? { sampleNote: ctx.sampleNote } : {}),
+    };
+  }
   return {
     csv: tableToCsv(ctx.table, PY_MAX_ROWS),
     fileName: ctx.displayName,
     columns: ctx.table.columns,
-    truncated: ctx.table.rows.length > PY_MAX_ROWS,
+    truncated: ctx.fullRowCount > PY_MAX_ROWS,
   };
 }
 
 export function plannerSchema(ctx: ResolvedDatasetContext) {
+  if (ctx.processing === "large" && ctx.largeColumns) {
+    const columns = ctx.largeColumns.slice(0, 59).map((column) => ({
+      name: column.name,
+      type: column.type,
+      sample: column.samples.slice(0, 4),
+    }));
+    const names = new Set(columns.map((column) => column.name.toLowerCase()));
+    const hasQty = ctx.largeColumns.some((column) => /quantity|^qty$/i.test(column.name));
+    const hasPrice = ctx.largeColumns.some((column) => /unit.?price|^price$/i.test(column.name));
+    if (hasQty && hasPrice && !names.has("revenue") && columns.length < 60) {
+      columns.push({ name: "Revenue", type: "numeric", sample: ["Quantity × UnitPrice on every row"] });
+    }
+    return { name: ctx.displayName, rows: ctx.fullRowCount, columns };
+  }
   const types = detectTypes(ctx.table);
   return {
     name: ctx.displayName,
-    rows: ctx.table.rows.length,
+    rows: ctx.fullRowCount,
     columns: ctx.table.columns.slice(0, 60).map((name, i) => {
       const seen = new Set<string>();
       for (const r of ctx.table.rows) {
@@ -151,12 +240,13 @@ export function plannerSchema(ctx: ResolvedDatasetContext) {
 // Row numbers in the log are 0-based data-row indexes, so they're translated to
 // spreadsheet row numbers (header = row 1) to keep answers unambiguous.
 export function buildDatasetMeta(ctx: ResolvedDatasetContext, log: CleaningLogRow[]): string {
-  const types = detectTypes(ctx.table);
-  const report = analyzeQuality(ctx.table);
+  const types = ctx.processing === "large" && ctx.largeColumns
+    ? Object.fromEntries(ctx.largeColumns.map((column) => [column.name, column.type]))
+    : detectTypes(ctx.table);
   const lines: string[] = [];
   lines.push(`Active dataset: "${ctx.displayName}"`);
   lines.push(
-    `Analysing: ${ctx.versionLabel}${ctx.sheetName ? ` · sheet "${ctx.sheetName}"` : ""} · ${ctx.table.rows.length.toLocaleString()} rows × ${ctx.table.columns.length} columns`,
+    `Analysing: ${ctx.versionLabel}${ctx.sheetName ? ` · sheet "${ctx.sheetName}"` : ""} · ${ctx.fullRowCount.toLocaleString()} rows × ${ctx.table.columns.length} columns`,
   );
   if (ctx.sheets.length > 1) lines.push(`Workbook sheets: ${ctx.sheets.join(", ")} (active: ${ctx.sheetName ?? "—"})`);
   if (ctx.note) lines.push(`NOTE: ${ctx.note}`);
@@ -168,9 +258,9 @@ export function buildDatasetMeta(ctx: ResolvedDatasetContext, log: CleaningLogRo
   );
   lines.push(
     "Columns: " +
-      ctx.table.columns
+      (ctx.largeColumns ?? ctx.table.columns.map((name) => ({ name, type: types[name] ?? "text" })))
         .slice(0, 40)
-        .map((c) => `${c} (${types[c] ?? "text"})`)
+        .map((column) => `${column.name} (${column.type})`)
         .join(", "),
   );
 
@@ -183,6 +273,10 @@ export function buildDatasetMeta(ctx: ResolvedDatasetContext, log: CleaningLogRo
     lines.push(`Cleaning history: ${log.length} recorded change(s) — ${[...byOp.entries()].map(([k, n]) => `${k} ×${n}`).join("; ")}.`);
     lines.push("Recorded changes (most recent first, max 15):");
     for (const e of log.slice(0, 15)) {
+      if (e.row_reference === "all") {
+        lines.push(`- ${e.new_value ?? e.reason ?? e.operation} (applied across the dataset)`);
+        continue;
+      }
       const row = Number(e.row_reference) + 2;
       lines.push(
         e.operation === "remove_row"
@@ -194,15 +288,30 @@ export function buildDatasetMeta(ctx: ResolvedDatasetContext, log: CleaningLogRo
     lines.push("Cleaning history: no changes have been recorded for this dataset.");
   }
 
-  lines.push(
-    `Data quality of the analysed version: ${report.score.overall}/100. ` +
-      (report.issues.length
-        ? `Items still flagged (unresolved or deliberately ignored — ignored items aren't stored): ${report.issues
-            .slice(0, 12)
-            .map((i) => `${i.title} [${i.severity}, ${i.affectedRowIndexes.length} rows]`)
-            .join("; ")}.`
-        : "Nothing is flagged."),
-  );
+  if (ctx.processing === "large" && ctx.largeQuality) {
+    const reportLarge = ctx.largeQuality;
+    lines.push(
+      `Data quality of the full dataset (${ctx.fullRowCount.toLocaleString()} rows): ${reportLarge.score.overall}/100. ` +
+        (reportLarge.issues.length
+          ? `Items flagged: ${reportLarge.issues
+              .slice(0, 12)
+              .map((issue) => `${issue.title} [${issue.severity}, ${issue.affectedCount.toLocaleString()} rows]`)
+              .join("; ")}.`
+          : "Nothing is flagged."),
+    );
+    if (ctx.sampleNote) lines.push(ctx.sampleNote);
+  } else {
+    const report = analyzeQuality(ctx.table);
+    lines.push(
+      `Data quality of the analysed version: ${report.score.overall}/100. ` +
+        (report.issues.length
+          ? `Items still flagged (unresolved or deliberately ignored — ignored items aren't stored): ${report.issues
+              .slice(0, 12)
+              .map((i) => `${i.title} [${i.severity}, ${i.affectedRowIndexes.length} rows]`)
+              .join("; ")}.`
+          : "Nothing is flagged."),
+    );
+  }
   return lines.join("\n");
 }
 

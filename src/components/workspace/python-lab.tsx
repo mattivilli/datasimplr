@@ -6,6 +6,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { codeNeedsDataset, findBlocked, nextSteps, runPython, starterPython } from "@/lib/pyodide-runtime";
 import { loadActiveDataset, saveActiveDataset, subscribeDataset } from "@/lib/dataset-store";
 import { parseUploadedFile } from "@/lib/parse-file";
+import { classifyFile } from "@/lib/large-data/decide";
 import { tableToCsv } from "@/lib/analysis";
 import { fixPython } from "@/lib/ai.functions";
 import { extractCodeBlocks } from "./copy-button";
@@ -18,6 +19,7 @@ export function PythonLab({
   seedCode,
   request,
   onExplain,
+  notice,
 }: {
   csv?: string | undefined;
   fileName?: string | null | undefined;
@@ -25,6 +27,7 @@ export function PythonLab({
   seedCode?: string | undefined;
   request?: string | undefined;
   onExplain?: ((result: ExplainPayload) => void) | undefined;
+  notice?: string | undefined;
 }) {
   const fix = useServerFn(fixPython);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -92,6 +95,11 @@ export function PythonLab({
   const onReupload = async (file: File | null) => {
     if (!file) return;
     try {
+      const decision = await classifyFile(file);
+      if (decision.mode === "large" || decision.mode === "unsupported") {
+        setError("This file is a large dataset. Open it in Upload & Analyze so it can be processed without freezing the page. PythonLab then receives a labeled sample.");
+        return;
+      }
       const parsed = await parseUploadedFile(file);
       const nextCsv = tableToCsv(parsed.table);
       if (!nextCsv.trim() || parsed.table.rows.length === 0) {
@@ -99,7 +107,14 @@ export function PythonLab({
         setError("That file did not load any rows. Upload a CSV or Excel file again.");
         return;
       }
-      await saveActiveDataset({ csv: nextCsv, fileName: parsed.sourceName, columns: parsed.table.columns });
+      await saveActiveDataset({
+        csv: nextCsv,
+        fileName: parsed.sourceName,
+        columns: parsed.table.columns,
+        fileBlob: file,
+        processing: "standard",
+        sampleRows: null,
+      });
       setBoundCsv(nextCsv);
       setBoundName(parsed.sourceName);
       setBoundCols(parsed.table.columns);
@@ -199,6 +214,9 @@ export function PythonLab({
             {boundName ? `df ← ${boundName} (saved on this device)` : "No file bound"} · pandas · matplotlib
           </p>
         </div>
+        {notice ? (
+          <p className="w-full text-[11px] text-amber-500" data-testid="python-sample-note">{notice}</p>
+        ) : null}
         <input
           ref={fileRef}
           type="file"

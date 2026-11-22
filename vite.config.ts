@@ -19,4 +19,8 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    ssr: { external: ["@duckdb/duckdb-wasm"] },
+    optimizeDeps: { exclude: ["@duckdb/duckdb-wasm"] },
+  },
 });

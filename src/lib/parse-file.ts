@@ -37,6 +37,9 @@ function isSpreadsheet(file: File): boolean {
 // files (nothing to pick from).
 export async function getSheetNames(file: File): Promise<string[] | null> {
   if (!isSpreadsheet(file)) return null;
+  if (file.size > MAX_BYTES) {
+    throw new Error("That file is larger than 50 MB. Try a smaller extract.");
+  }
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array", bookSheets: true });
   return workbook.SheetNames;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   ClipboardPaste,
@@ -21,6 +21,15 @@ import {
 } from "recharts";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   TOOLS,
   cleanTable,
   correlationMatrix,
@@ -40,8 +49,12 @@ import {
   type ToolKey,
 } from "@/lib/analysis";
 import { getSheetNames, parseUploadedFile } from "@/lib/parse-file";
+import { classifyFile, opensAsSplit } from "@/lib/large-data/decide";
+import { formatBytes } from "@/lib/plans";
+import { isDelimitedName } from "@/lib/large-data/sniff";
+import { LargeDatasetStudio } from "./large-dataset-studio";
 import { WithPythonSplit } from "@/components/workspace/with-python-split";
-import { saveActiveDataset } from "@/lib/dataset-store";
+import { loadActiveDataset, saveActiveDataset } from "@/lib/dataset-store";
 
 const sample = `region,month,revenue,units,refunds
 North,Jul,412300,1820,4200
@@ -79,6 +92,7 @@ export function AnalyticsStudio({
   onSave,
   onSaveDataset,
   initialDataset,
+  initialLarge = null,
   insightLimit = null,
   onUnlockInsights,
   unlockLabel = "Unlock all findings",
@@ -86,6 +100,7 @@ export function AnalyticsStudio({
   onSave?: (payload: SavePayload) => Promise<void>;
   onSaveDataset?: (payload: SaveDatasetPayload) => Promise<void>;
   initialDataset?: { table: Table; sourceName: string; sourceFile: File; sheetName?: string | null } | null;
+  initialLarge?: File | null;
   // Show only the first N findings; the rest render blurred behind an unlock CTA.
   insightLimit?: number | null;
   onUnlockInsights?: () => void;
@@ -112,6 +127,12 @@ export function AnalyticsStudio({
   const [savingDataset, setSavingDataset] = useState(false);
   const [datasetError, setDatasetError] = useState<string | null>(null);
   const [savedDatasetName, setSavedDatasetName] = useState<string | null>(null);
+  const [largeFile, setLargeFile] = useState<File | null>(initialLarge);
+  const [largeBlocked, setLargeBlocked] = useState(false);
+  const [intake, setIntake] = useState<{ name: string; sizeLabel: string; status: string } | null>(null);
+  const [fileNotice, setFileNotice] = useState<string | null>(null);
+  const [boot, setBoot] = useState<"pending" | "done">(initialLarge || initialDataset ? "done" : "pending");
+  const resumeSampleRef = useRef<number | null>(null);
 
   const table = cleaned.table;
   const types = useMemo(() => detectTypes(table), [table]);
@@ -141,8 +162,49 @@ export function AnalyticsStudio({
       csv: tableToCsv(result.table),
       fileName: name ?? "pasted data",
       columns: result.table.columns,
+      fileBlob: file,
+      processing: "standard",
+      sampleRows: null,
     });
   };
+
+  useEffect(() => {
+    if (initialLarge) {
+      setLargeFile(initialLarge);
+      setLargeBlocked(false);
+      setBoot("done");
+    }
+  }, [initialLarge]);
+
+  useEffect(() => {
+    if (initialLarge || initialDataset) {
+      setBoot("done");
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const stored = await loadActiveDataset();
+      if (cancelled) return;
+      if (stored?.fileBlob && stored.fileBlob.size > 0) {
+        const file = new File([stored.fileBlob], stored.fileName || "dataset.csv", {
+          type: stored.fileBlob.type || "text/csv",
+        });
+        await onFile(file, stored.sampleRows ? { sampleRows: stored.sampleRows } : undefined);
+      } else if (stored?.csv && stored.columns.length > 0) {
+        const table = parseDelimited(stored.csv);
+        if (table.columns.length > 0 && table.rows.length > 0) {
+          const name = stored.fileName || "dataset.csv";
+          applyTable(table, name, new File([stored.csv], name.endsWith(".csv") ? name : `${name}.csv`, { type: "text/csv" }), null);
+        }
+      }
+      if (!cancelled) setBoot("done");
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Restore once on mount. initialDataset from a saved dataset wins when it arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLarge, initialDataset]);
 
   useEffect(() => {
     if (initialDataset)
@@ -150,10 +212,41 @@ export function AnalyticsStudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialDataset]);
 
-  const onFile = async (file: File | null) => {
+  const onFile = async (file: File | null, resume?: { sampleRows?: number }) => {
     if (!file) return;
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const sizeLabel = formatBytes(file.size);
     setError(null);
+    setLargeFile(null);
+    setLargeBlocked(false);
+    setIntake({ name: file.name, sizeLabel, status: resume ? "Restored. Opening your last file…" : "File received. Checking it…" });
     try {
+      if ((ext === "xlsx" || ext === "xls" || ext === "json") && file.size > 50 * 1024 * 1024) {
+        setIntake({ name: file.name, sizeLabel, status: "Not loaded." });
+        setFileNotice(
+          `${file.name} is ${sizeLabel}. Excel and JSON files stop at 50 MB, so this file was not loaded. Save it as CSV or TSV to analyze it here.`,
+        );
+        return;
+      }
+      if (isDelimitedName(file.name)) {
+        const decision = await classifyFile(file);
+        if (decision.mode === "large" || decision.mode === "unsupported") {
+          const sampleRows = resume?.sampleRows;
+          resumeSampleRef.current = sampleRows ?? null;
+          setLargeBlocked(decision.mode === "unsupported" && sampleRows == null && !opensAsSplit(decision));
+          void saveActiveDataset({
+            csv: "",
+            fileName: file.name,
+            columns: decision.sniff?.header ?? [],
+            fileBlob: file,
+            processing: "large",
+            ...(sampleRows ? { sampleRows } : { sampleRows: null }),
+          });
+          setLargeFile(file);
+          return;
+        }
+      }
+      resumeSampleRef.current = null;
       const sheets = await getSheetNames(file);
       if (sheets && sheets.length > 1) {
         setPendingFile(file);
@@ -161,8 +254,10 @@ export function AnalyticsStudio({
         return;
       }
       const parsed = await parseUploadedFile(file, sheets?.[0]);
+      setIntake(null);
       applyTable(parsed.table, parsed.sourceName, file, sheets?.[0] ?? null);
     } catch (e) {
+      setIntake((current) => (current ? { ...current, status: "Not loaded." } : current));
       setError(e instanceof Error ? e.message : "Could not read that file.");
     }
   };
@@ -244,8 +339,55 @@ export function AnalyticsStudio({
     }
   };
 
+  if (boot === "pending") {
+    return (
+      <div className="panel p-5" data-testid="restore-dataset">
+        <p className="text-sm font-semibold">Opening your last dataset…</p>
+        <p className="mt-1 text-xs text-muted-foreground">A refresh keeps the file you already uploaded.</p>
+      </div>
+    );
+  }
+
+  if (largeFile) {
+    return (
+      <LargeDatasetStudio
+        file={largeFile}
+        blocked={largeBlocked}
+        resumeSampleRows={resumeSampleRef.current}
+        onSaveDataset={onSaveDataset}
+        onBack={() => {
+          setLargeFile(null);
+          setLargeBlocked(false);
+        }}
+        onStandard={(next) => {
+          setLargeFile(null);
+          setLargeBlocked(false);
+          void (async () => {
+            try {
+              const parsed = await parseUploadedFile(next);
+              applyTable(parsed.table, parsed.sourceName, next, null);
+            } catch (reason) {
+              setError(reason instanceof Error ? reason.message : "Could not read that file.");
+            }
+          })();
+        }}
+      />
+    );
+  }
+
   return (
     <WithPythonSplit csv={tableToCsv(table)} fileName={fileName ?? "pasted data"} columns={table.columns}>
+    <AlertDialog open={fileNotice != null} onOpenChange={(open) => { if (!open) setFileNotice(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>This file was not loaded</AlertDialogTitle>
+          <AlertDialogDescription>{fileNotice}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction>OK</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(220px,280px)]">
       <div className="min-w-0 space-y-5">
         <div className="panel p-5">
@@ -302,13 +444,17 @@ export function AnalyticsStudio({
                 <Upload className="mx-auto size-5 text-primary" />
                 <p className="mt-3 text-sm font-semibold">Drop Excel, CSV, TSV or JSON</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  .xlsx, .xls, .csv, .tsv, .json — up to 50 MB. Parsed in your browser.
+                  .xlsx, .xls and .json up to 50 MB. Larger CSV and TSV files use optimized processing in your browser.
                 </p>
                 <input
                   type="file"
                   accept=".csv,.tsv,.txt,.json,.xlsx,.xls"
                   className="hidden"
-                  onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => {
+                    const chosen = e.target.files?.[0] ?? null;
+                    e.target.value = "";
+                    void onFile(chosen);
+                  }}
                 />
               </label>
             )
@@ -322,6 +468,16 @@ export function AnalyticsStudio({
               rows={10}
               className="mt-4 w-full rounded-xl border border-border bg-muted p-3 font-mono text-[11px] leading-relaxed text-muted-foreground outline-none focus:border-primary"
             />
+          )}
+
+          {intake && (
+            <div className="mt-4 rounded-xl border border-border bg-muted px-4 py-3" data-testid="file-intake">
+              <p className="truncate text-sm font-semibold">{intake.name}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {intake.sizeLabel} · {intake.status}
+              </p>
+              {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+            </div>
           )}
 
           <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-border bg-accent/40 px-4 py-3 sm:grid-cols-4">

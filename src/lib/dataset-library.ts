@@ -285,6 +285,103 @@ export async function finalizeDataset(params: {
   return data;
 }
 
+// Large-dataset cleaning writes a CSV file produced by the query engine.
+// The original uploaded bytes are never passed through this function.
+export async function saveWorkingFile(params: {
+  dataset: DatasetRow;
+  file: File;
+  userId: string;
+  qualityScore: number;
+  rowCount: number;
+  columnCount: number;
+  existingWorkingVersion: DatasetVersionRow | null;
+}): Promise<DatasetVersionRow> {
+  const { dataset, file, userId, qualityScore, rowCount, columnCount, existingWorkingVersion } = params;
+
+  if (existingWorkingVersion) {
+    const { error: upErr } = await supabase.storage
+      .from(DATASET_BUCKET)
+      .upload(existingWorkingVersion.storage_key, file, { contentType: "text/csv", upsert: true });
+    if (upErr) throw upErr;
+    const { data, error } = await supabase
+      .from("dataset_versions")
+      .update({ row_count: rowCount, column_count: columnCount, quality_score: qualityScore })
+      .eq("id", existingWorkingVersion.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    await supabase.from("datasets").update({ status: "cleaning" }).eq("id", dataset.id);
+    return data;
+  }
+
+  const versions = await listVersions(dataset.id);
+  const nextVersionNumber = Math.max(1, ...versions.map((v) => v.version_number)) + 1;
+  const versionId = crypto.randomUUID();
+  const storageKey = `${userId}/${dataset.id}/${versionId}/${file.name}`;
+  const { error: uploadErr } = await supabase.storage.from(DATASET_BUCKET).upload(storageKey, file, { contentType: "text/csv", upsert: false });
+  if (uploadErr) throw uploadErr;
+
+  const { data, error } = await supabase
+    .from("dataset_versions")
+    .insert({
+      id: versionId,
+      dataset_id: dataset.id,
+      user_id: userId,
+      version_number: nextVersionNumber,
+      kind: "working",
+      sheet_name: versions.find((v) => v.kind === "original")?.sheet_name ?? null,
+      storage_key: storageKey,
+      row_count: rowCount,
+      column_count: columnCount,
+      quality_score: qualityScore,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  await supabase.from("datasets").update({ current_version_id: versionId, status: "cleaning" }).eq("id", dataset.id);
+  return data;
+}
+
+export async function finalizeDatasetFile(params: {
+  dataset: DatasetRow;
+  file: File;
+  userId: string;
+  qualityScore: number;
+  rowCount: number;
+  columnCount: number;
+}): Promise<DatasetVersionRow> {
+  const { dataset, file, userId, qualityScore, rowCount, columnCount } = params;
+  const versions = await listVersions(dataset.id);
+  const nextVersionNumber = Math.max(1, ...versions.map((v) => v.version_number)) + 1;
+  const versionId = crypto.randomUUID();
+  const storageKey = `${userId}/${dataset.id}/${versionId}/${file.name}`;
+
+  const { error: uploadErr } = await supabase.storage.from(DATASET_BUCKET).upload(storageKey, file, { contentType: "text/csv", upsert: false });
+  if (uploadErr) throw uploadErr;
+
+  const { data, error } = await supabase
+    .from("dataset_versions")
+    .insert({
+      id: versionId,
+      dataset_id: dataset.id,
+      user_id: userId,
+      version_number: nextVersionNumber,
+      kind: "finalized",
+      sheet_name: versions.find((v) => v.kind === "original")?.sheet_name ?? null,
+      storage_key: storageKey,
+      row_count: rowCount,
+      column_count: columnCount,
+      quality_score: qualityScore,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  await supabase.from("datasets").update({ current_version_id: versionId, status: "finalized" }).eq("id", dataset.id);
+  return data;
+}
+
 export async function logCleaningChanges(
   entries: {
     datasetId: string;

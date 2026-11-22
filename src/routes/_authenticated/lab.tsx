@@ -75,6 +75,7 @@ function LabPage() {
           selection={selection}
           onSelect={select}
           truncatedRows={py?.truncated ? PY_MAX_ROWS : undefined}
+          sampleNote={py?.sampleNote}
         />
       </div>
       <div className="panel h-[calc(100dvh-16rem)] min-h-[480px] overflow-hidden">
@@ -83,6 +84,7 @@ function LabPage() {
           csv={py?.csv}
           fileName={py?.fileName}
           columns={py?.columns}
+          notice={py?.sampleNote}
           seedCode={handoff?.code}
           request={handoff?.request}
           onExplain={ctx ? explain : undefined}

@@ -303,7 +303,13 @@ function ChatPage() {
           try {
             const recent = (messages ?? []).filter((m) => m.role === "user").slice(-3).map((m) => m.content.slice(0, 300));
             const planned = await plan({ data: { question: text, recent, schema: plannerSchema(ds), model } });
-            results = planned.ops.map((op) => runQueryOp(ds.table, op));
+            if (ds.processing === "large" && ds.largeSessionId) {
+              const { runLargeQueryOp } = await import("@/lib/large-data/request");
+              results = [];
+              for (const op of planned.ops) results.push(await runLargeQueryOp(ds.largeSessionId, op));
+            } else {
+              results = planned.ops.map((op) => runQueryOp(ds.table, op));
+            }
           } catch (e) {
             console.error("Dataset planning failed", e);
           }
@@ -321,6 +327,32 @@ function ChatPage() {
               "(No operation was run for this question. Do not state new figures; say what is missing, or suggest running it in PythonLab.)",
           "",
           "Answer the user's question directly and concisely, using the computed results and dataset facts above. Use the Snapshot / Key findings layout only when they ask for a full summary. State which version and sheet the numbers come from.",
+        ]
+          .join(nl)
+          .slice(0, 15800);
+      } else if (file?.largeSessionId && file.plannerSchema) {
+        let results: QueryResult[] = [];
+        const skipPlan = skipPlanRef.current;
+        skipPlanRef.current = false;
+        if (!skipPlan) {
+          try {
+            const recent = (messages ?? []).filter((m) => m.role === "user").slice(-3).map((m) => m.content.slice(0, 300));
+            const planned = await plan({ data: { question: text, recent, schema: file.plannerSchema, model } });
+            const { runLargeQueryOp } = await import("@/lib/large-data/request");
+            for (const op of planned.ops) results.push(await runLargeQueryOp(file.largeSessionId!, op));
+          } catch (e) {
+            console.error("Dataset planning failed", e);
+          }
+        }
+        const nl = String.fromCharCode(10);
+        context = [
+          file.context,
+          "",
+          results.length
+            ? "## Computed results (run on the loaded dataset just now; authoritative - quote numbers exactly, never adjust them)" +
+              nl +
+              formatResultsForPrompt(results)
+            : "## Computed results" + nl + "(No operation was run. Do not invent figures.)",
         ]
           .join(nl)
           .slice(0, 15800);
@@ -366,7 +398,16 @@ function ChatPage() {
         setAttachment(built);
         attachmentRef.current = built;
         setResumable(null);
-        if (built.csv) void saveActiveDataset({ csv: built.csv, fileName: built.name, columns: built.columns ?? [] });
+        if (built.csv) {
+          void saveActiveDataset({
+            csv: built.csv,
+            fileName: built.name,
+            columns: built.columns ?? [],
+            fileBlob: null,
+            processing: "standard",
+            sampleRows: null,
+          });
+        }
       }
     }
     const prompt = trimmed || ANALYZE_PROMPT;
@@ -393,6 +434,9 @@ function ChatPage() {
           csv: prepared.csv,
           fileName: prepared.name,
           columns: prepared.columns ?? [],
+          fileBlob: file,
+          processing: "standard",
+          sampleRows: null,
         });
       }
       submit(ANALYZE_PROMPT);
@@ -509,6 +553,7 @@ function ChatPage() {
         csv={py?.csv ?? attachment?.csv}
         fileName={py?.fileName ?? attachment?.name}
         columns={py?.columns ?? attachment?.columns}
+        notice={py?.sampleNote ?? attachment?.sampleNote}
         request={labRequest}
         onExplain={dsState.ctx ? submitExplain : undefined}
       >
@@ -572,6 +617,7 @@ function ChatPage() {
             selection={selection}
             onSelect={selectDataset}
             truncatedRows={py?.truncated ? PY_MAX_ROWS : undefined}
+            sampleNote={py?.sampleNote}
           />
 
           <div ref={threadRef} className="relative min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-6">

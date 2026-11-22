@@ -9,6 +9,8 @@ import {
   type Table,
 } from "./analysis";
 import { getSheetNames, parseUploadedFile } from "./parse-file";
+import { classifyFile, unsupportedMessage } from "./large-data/decide";
+import { LARGE_DATA } from "./large-data/config";
 
 const TABULAR = new Set(["xlsx", "xls", "csv", "tsv", "json"]);
 const TEXT = new Set(["txt", "md", "csv", "tsv", "json"]);
@@ -21,6 +23,13 @@ export type ChatAttachment = {
   localSummary: string;
   csv?: string;
   columns?: string[];
+  sampleNote?: string;
+  largeSessionId?: string;
+  plannerSchema?: {
+    name: string;
+    rows: number;
+    columns: { name: string; type: string; sample: string[] }[];
+  };
 };
 
 function extOf(name: string) {
@@ -168,6 +177,52 @@ export async function prepareChatFile(file: File, sheetName?: string): Promise<C
 
   if (ext === "doc") {
     throw new Error("The old .doc format isn't supported. Save it as .docx (or export as PDF/CSV/TXT) and attach that.");
+  }
+
+  if ((ext === "csv" || ext === "tsv" || ext === "txt") && file.size > LARGE_DATA.sniffSkipBytes) {
+    const decision = await classifyFile(file);
+    if (decision.mode === "unsupported") {
+      throw new Error(`${unsupportedMessage(decision.rows)} Open Upload & Analyze to take a labeled sample or filter it first.`);
+    }
+    if (decision.mode === "large") {
+      if (typeof window === "undefined") throw new Error("Large files are analysed in the browser.");
+      const engine = await import("./large-data/engine");
+      const info = await engine.openLargeFile(file, { cacheKey: `chat|${file.name}|${file.size}|${file.lastModified}` });
+      const quality = await engine.ensureQuality(info.id);
+      const preview = await engine.previewPage(info.id, 0, { limit: 5 });
+      const columns = info.columns.slice(0, 59).map((column) => ({
+        name: column.name,
+        type: column.type,
+        sample: column.samples.slice(0, 4).map((value) => value.slice(0, 40)),
+      }));
+      const hasQty = info.columns.some((column) => /quantity|^qty$/i.test(column.name));
+      const hasPrice = info.columns.some((column) => /unit.?price|^price$/i.test(column.name));
+      if (hasQty && hasPrice && columns.length < 60) {
+        columns.push({ name: "Revenue", type: "numeric", sample: ["Quantity × UnitPrice on every row"] });
+      }
+      const sample = await engine.sampleCsv(info.id);
+      const summary = [
+        `Large dataset: ${info.rowCount.toLocaleString()} rows × ${info.columnCount} columns.`,
+        "DataSimplr is using optimized processing. Do not invent row-level figures.",
+        `Quality score ${quality.score.overall}/100.`,
+        ...quality.issues.slice(0, 8).map((issue) => `${issue.title}: ${issue.affectedCount.toLocaleString()} rows.`),
+        sample.note,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      return {
+        name: file.name,
+        kind: "dataset",
+        sizeLabel,
+        context: `Dataset file: ${file.name}\n\n${summary}`.slice(0, MAX_CONTEXT),
+        localSummary: `Large dataset **${file.name}** — ${info.rowCount.toLocaleString()} rows × ${info.columnCount} columns. Optimized processing is on. Ask a question and DataSimplr will calculate it on the full loaded file.`,
+        csv: sample.csv,
+        columns: preview.columns,
+        ...(sample.note ? { sampleNote: sample.note } : {}),
+        largeSessionId: info.id,
+        plannerSchema: { name: file.name, rows: info.rowCount, columns },
+      };
+    }
   }
 
   if (TABULAR.has(ext) || TEXT.has(ext)) {

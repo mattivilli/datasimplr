@@ -15,6 +15,7 @@ export function DatasetContextBar({
   selection,
   onSelect,
   truncatedRows,
+  sampleNote,
   edge = "bottom",
 }: {
   ctx: ResolvedDatasetContext | null;
@@ -23,6 +24,7 @@ export function DatasetContextBar({
   selection: DatasetSelection | null;
   onSelect: (next: DatasetSelection | null) => void;
   truncatedRows?: number | undefined;
+  sampleNote?: string | undefined;
   edge?: "top" | "bottom";
 }) {
   const { data: datasets } = useQuery({ queryKey: ["dataset-options"], queryFn: listDatasets });
@@ -108,7 +110,7 @@ export function DatasetContextBar({
                 <div>
                   <span className="text-subtle">Rows × Columns</span>
                   <p className="mt-1.5 font-medium">
-                    {ctx.table.rows.length.toLocaleString()} × {ctx.table.columns.length}
+                    {(ctx.fullRowCount ?? ctx.table.rows.length).toLocaleString()} × {ctx.table.columns.length}
                   </p>
                 </div>
               </div>
@@ -118,7 +120,12 @@ export function DatasetContextBar({
                   {ctx.note}
                 </p>
               )}
-              {truncatedRows ? (
+              {ctx.processing === "large" && (
+                <p className="mt-2 text-[11px] text-muted-foreground">Large dataset. DataSimplr is using optimized processing for this file.</p>
+              )}
+              {sampleNote ? (
+                <p className="mt-1 text-[11px] text-amber-500">{sampleNote}</p>
+              ) : truncatedRows ? (
                 <p className="mt-1 text-[11px] text-subtle">
                   PythonLab loads the first {truncatedRows.toLocaleString()} rows of this sheet (browser memory limit).
                 </p>

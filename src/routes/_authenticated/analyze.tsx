@@ -4,7 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { WorkspaceShell } from "@/components/workspace/shell";
 import { AnalyticsStudio } from "@/components/workspace/analytics-studio";
-import { QuotaError, getDataset, getVersion, loadDatasetTable, saveDataset } from "@/lib/dataset-library";
+import { QuotaError, downloadVersionBlob, getDataset, getVersion, loadDatasetTable, saveDataset, versionFilename } from "@/lib/dataset-library";
+import { storedDatasetMode } from "@/lib/large-data/decide";
 import { useUpgrade } from "@/components/billing/upgrade";
 import { checkDatasetQuota, useEntitlements, useRefreshEntitlements } from "@/lib/entitlements";
 import { PLAN_LIMITS, QUOTA_MESSAGES, formatBytes, type QuotaReason } from "@/lib/plans";
@@ -51,6 +52,7 @@ function AnalyzePage() {
   const [initialDataset, setInitialDataset] = useState<
     { table: Table; sourceName: string; sourceFile: File; sheetName: string | null } | null
   >(null);
+  const [initialLarge, setInitialLarge] = useState<File | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,6 +64,18 @@ function AnalyzePage() {
         if (!dataset?.current_version_id) throw new Error("That dataset has no saved version.");
         const version = await getVersion(dataset.current_version_id);
         if (!version) throw new Error("That dataset's file could not be found.");
+        const mode = storedDatasetMode({
+          file_type: version.kind === "original" ? dataset.file_type : "csv",
+          file_size: version.kind === "original" ? dataset.file_size : null,
+          row_count: version.row_count ?? dataset.row_count,
+          column_count: version.column_count ?? dataset.column_count,
+        });
+        if (mode === "large") {
+          const blob = await downloadVersionBlob(version);
+          const file = new File([blob], versionFilename(dataset, version), { type: blob.type || "text/csv" });
+          if (!cancelled) setInitialLarge(file);
+          return;
+        }
         const { table, sourceName, file } = await loadDatasetTable(dataset, version);
         if (!cancelled) setInitialDataset({ table, sourceName, sourceFile: file, sheetName: version.sheet_name });
       } catch (e) {
@@ -81,6 +95,7 @@ function AnalyzePage() {
       {loadError && <p className="mb-4 text-sm text-destructive">{loadError}</p>}
       <AnalyticsStudio
         initialDataset={initialDataset}
+        initialLarge={initialLarge}
         insightLimit={ent?.enforced && ent.plan === "free" ? PLAN_LIMITS.free.insightPreview : null}
         onUnlockInsights={() =>
           upgrade.open({
