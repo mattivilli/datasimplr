@@ -1,8 +1,9 @@
+import { isDevBypass } from "@/lib/dev-bypass";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronLeft, ChevronRight, Loader2, Paperclip, Plus, Send, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, Loader2, Paperclip, Plus, Send, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { askAssistant, DEFAULT_GROQ_MODEL, GROQ_MODELS, planDatasetQuery } from "@/lib/ai.functions";
 import {
@@ -35,6 +36,16 @@ import { CopyButton, extractCodeBlocks } from "@/components/workspace/copy-butto
 import { Button } from "@/components/ui/button";
 import { openPythonLab, WithPythonSplit } from "@/components/workspace/with-python-split";
 import { ScrollTop } from "@/components/workspace/scroll-top";
+import {
+  encodeMessageWithTrace,
+  parseMessageTrace,
+  PlanTraceabilityChip,
+  summarizeOps,
+  type PlanChipTrace,
+} from "@/components/workspace/plan-chip";
+import { FirstReadCoach } from "@/components/workspace/first-read-coach";
+import { ExecutiveBriefDialog } from "@/components/workspace/executive-brief";
+import type { QueryOp } from "@/lib/dataset-query";
 
 export const Route = createFileRoute("/_authenticated/chat")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -99,6 +110,7 @@ function ChatPage() {
   const py = useMemo(() => (dsState.ctx ? pythonInputs(dsState.ctx) : null), [dsState.ctx]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState<string | null>(null);
+  const [planningStep, setPlanningStep] = useState<string | null>(null);
   const [model, setModel] = useState<string>(DEFAULT_GROQ_MODEL);
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -195,10 +207,18 @@ function ChatPage() {
   const { data: conversations } = useQuery({
     queryKey: ["conversations"],
     queryFn: async () => {
-      const { data } = await supabase
+      if (isDevBypass()) {
+        try {
+          const stored = localStorage.getItem("ds_dev_conversations");
+          if (stored) return JSON.parse(stored) as { id: string; title: string; updated_at: string }[];
+        } catch {}
+        return [];
+      }
+      const { data, error } = await supabase
         .from("conversations")
         .select("id, title, updated_at")
         .order("updated_at", { ascending: false });
+      if (error) return [];
       return data ?? [];
     },
   });
@@ -207,11 +227,19 @@ function ChatPage() {
     queryKey: ["messages", c],
     enabled: !!c,
     queryFn: async () => {
-      const { data } = await supabase
+      if (isDevBypass()) {
+        try {
+          const stored = localStorage.getItem(`ds_dev_msg_${c}`);
+          if (stored) return JSON.parse(stored) as Message[];
+        } catch {}
+        return [];
+      }
+      const { data, error } = await supabase
         .from("messages")
         .select("id, role, content, created_at")
         .eq("conversation_id", c!)
         .order("created_at");
+      if (error) return [];
       return (data ?? []) as Message[];
     },
   });
@@ -249,26 +277,36 @@ function ChatPage() {
       const visible = ds
         ? `[Dataset] ${ds.displayName} | ${ds.versionLabel}` + String.fromCharCode(10, 10) + text
         : file ? `📎 ${file.name}\n\n${text}` : text;
+      const isDev = (isDevBypass());
       const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user!.id;
+      const userId = auth.user?.id ?? "dev-user-local";
 
       let conversationId = c;
       if (!conversationId) {
+        conversationId = crypto.randomUUID();
         const title = ds
           ? `${ds.displayName}: ${text}`.slice(0, 60)
           : file ? `${file.name}: ${text}`.slice(0, 60) : text.slice(0, 60);
-        const { data, error } = await supabase
-          .from("conversations")
-          .insert({
-            user_id: userId,
-            title,
-            kind: "expert",
-            ...(ds ? { dataset_id: ds.dataset.id, dataset_version_id: ds.requestedVersion.id, sheet_name: ds.sheetName } : {}),
-          })
-          .select("id")
-          .single();
-        if (error) throw error;
-        conversationId = data.id;
+
+        if (isDev || !auth.user) {
+          try {
+            const existing = JSON.parse(localStorage.getItem("ds_dev_conversations") ?? "[]") as { id: string; title: string; updated_at: string }[];
+            existing.unshift({ id: conversationId, title, updated_at: new Date().toISOString() });
+            localStorage.setItem("ds_dev_conversations", JSON.stringify(existing));
+          } catch {}
+        } else {
+          const { error } = await supabase
+            .from("conversations")
+            .insert({
+              id: conversationId,
+              user_id: userId,
+              title,
+              kind: "expert",
+              ...(ds ? { dataset_id: ds.dataset.id, dataset_version_id: ds.requestedVersion.id, sheet_name: ds.sheetName } : {}),
+            });
+          if (error) throw error;
+        }
+
         await navigate({
           search: {
             c: conversationId,
@@ -280,9 +318,25 @@ function ChatPage() {
         });
       }
 
-      await supabase
-        .from("messages")
-        .insert({ conversation_id: conversationId, user_id: userId, role: "user", content: visible });
+      const userMsg: Message = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: visible,
+        created_at: new Date().toISOString(),
+      };
+
+      if (isDev || !auth.user) {
+        try {
+          const existing = JSON.parse(localStorage.getItem(`ds_dev_msg_${conversationId}`) ?? "[]") as Message[];
+          existing.push(userMsg);
+          localStorage.setItem(`ds_dev_msg_${conversationId}`, JSON.stringify(existing));
+          queryClient.setQueryData(["messages", conversationId], existing);
+        } catch {}
+      } else {
+        await supabase
+          .from("messages")
+          .insert({ conversation_id: conversationId, user_id: userId, role: "user", content: visible });
+      }
 
       const history = [
         ...(messages ?? []).map((m) => ({
@@ -293,16 +347,24 @@ function ChatPage() {
       ];
 
       let context = file?.context;
+      let trace: PlanChipTrace | null = null;
+
       if (ds) {
         // Plan -> compute on the real data -> explain. Only the schema goes to
         // the planner; only the (small) computed results go to the explainer.
         let results: QueryResult[] = [];
+        let executedOps: QueryOp[] = [];
         const skipPlan = skipPlanRef.current;
         skipPlanRef.current = false;
         if (!skipPlan) {
           try {
+            setPlanningStep("Formulating verified calculation plan…");
             const recent = (messages ?? []).filter((m) => m.role === "user").slice(-3).map((m) => m.content.slice(0, 300));
             const planned = await plan({ data: { question: text, recent, schema: plannerSchema(ds), model } });
+            executedOps = planned.ops;
+            if (executedOps.length > 0) {
+              setPlanningStep(`Calculating on ${ds.displayName} (${ds.processing === "large" ? "DuckDB-WASM" : "Data Engine"})…`);
+            }
             if (ds.processing === "large" && ds.largeSessionId) {
               const { runLargeQueryOp } = await import("@/lib/large-data/request");
               results = [];
@@ -314,6 +376,21 @@ function ChatPage() {
             console.error("Dataset planning failed", e);
           }
         }
+
+        if (executedOps.length > 0) {
+          trace = {
+            version: 1,
+            datasetName: ds.displayName,
+            versionLabel: ds.versionLabel,
+            sheetName: ds.sheetName,
+            processing: ds.processing,
+            ops: executedOps,
+            summary: summarizeOps(executedOps),
+            results,
+            timestamp: new Date().toISOString(),
+          };
+        }
+
         const nl = String.fromCharCode(10);
         context = [
           buildDatasetMeta(ds, dsRef.current.log),
@@ -332,18 +409,38 @@ function ChatPage() {
           .slice(0, 15800);
       } else if (file?.largeSessionId && file.plannerSchema) {
         let results: QueryResult[] = [];
+        let executedOps: QueryOp[] = [];
         const skipPlan = skipPlanRef.current;
         skipPlanRef.current = false;
         if (!skipPlan) {
           try {
+            setPlanningStep("Formulating verified calculation plan…");
             const recent = (messages ?? []).filter((m) => m.role === "user").slice(-3).map((m) => m.content.slice(0, 300));
             const planned = await plan({ data: { question: text, recent, schema: file.plannerSchema, model } });
+            executedOps = planned.ops;
+            if (executedOps.length > 0) {
+              setPlanningStep(`Calculating on ${file.name} (DuckDB-WASM)…`);
+            }
             const { runLargeQueryOp } = await import("@/lib/large-data/request");
             for (const op of planned.ops) results.push(await runLargeQueryOp(file.largeSessionId!, op));
           } catch (e) {
             console.error("Dataset planning failed", e);
           }
         }
+
+        if (executedOps.length > 0) {
+          trace = {
+            version: 1,
+            datasetName: file.name,
+            sheetName: null,
+            processing: "large",
+            ops: executedOps,
+            summary: summarizeOps(executedOps),
+            results,
+            timestamp: new Date().toISOString(),
+          };
+        }
+
         const nl = String.fromCharCode(10);
         context = [
           file.context,
@@ -358,17 +455,36 @@ function ChatPage() {
           .slice(0, 15800);
       }
 
+      setPlanningStep("Explaining findings with verified numbers…");
       const { reply } = await ask({
         data: { messages: history.slice(-20), model, ...(context ? { context } : {}) },
       });
 
-      await supabase
-        .from("messages")
-        .insert({ conversation_id: conversationId, user_id: userId, role: "assistant", content: reply });
-      await supabase
-        .from("conversations")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", conversationId);
+      const messageContent = encodeMessageWithTrace(reply, trace);
+
+      const botMsg: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: messageContent,
+        created_at: new Date().toISOString(),
+      };
+
+      if (isDev || !auth.user) {
+        try {
+          const existing = JSON.parse(localStorage.getItem(`ds_dev_msg_${conversationId}`) ?? "[]") as Message[];
+          existing.push(botMsg);
+          localStorage.setItem(`ds_dev_msg_${conversationId}`, JSON.stringify(existing));
+          queryClient.setQueryData(["messages", conversationId], existing);
+        } catch {}
+      } else {
+        await supabase
+          .from("messages")
+          .insert({ conversation_id: conversationId, user_id: userId, role: "assistant", content: messageContent });
+        await supabase
+          .from("conversations")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", conversationId);
+      }
 
       return conversationId;
     },
@@ -378,6 +494,7 @@ function ChatPage() {
     },
     onSettled: (conversationId) => {
       setPending(null);
+      setPlanningStep(null);
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["messages", conversationId ?? c] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -524,7 +641,16 @@ function ChatPage() {
   };
 
   const removeChat = async (id: string) => {
-    await supabase.from("conversations").delete().eq("id", id);
+    if (isDevBypass()) {
+      try {
+        const stored = JSON.parse(localStorage.getItem("ds_dev_conversations") ?? "[]") as { id: string }[];
+        const filtered = stored.filter((c) => c.id !== id);
+        localStorage.setItem("ds_dev_conversations", JSON.stringify(filtered));
+        localStorage.removeItem(`ds_dev_msg_${id}`);
+      } catch {}
+    } else {
+      await supabase.from("conversations").delete().eq("id", id);
+    }
     queryClient.invalidateQueries({ queryKey: ["conversations"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     if (c === id) await navigate({ search: { c: undefined, dataset, version, sheet, explain: undefined } });
@@ -642,17 +768,54 @@ function ChatPage() {
                   Drop a file here or click to browse
                   <span className="mt-1 block text-[11px] text-subtle">.xlsx .xls .csv .json .txt .md</span>
                 </button>
-                <div className="mt-6 grid gap-2">
-                  {(dsState.ctx ? datasetStarters : starters).map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => submit(s)}
-                      className="rounded-xl border border-border bg-muted px-4 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
+                {dsState.ctx ? (
+                  <div className="mt-6 text-left">
+                    <FirstReadCoach
+                      datasetName={dsState.ctx.displayName}
+                      rowCount={dsState.ctx.fullRowCount}
+                      versionLabel={dsState.ctx.versionLabel}
+                      columns={
+                        dsState.ctx.largeColumns ??
+                        dsState.ctx.table.columns.map((name) => ({
+                          name,
+                          type: "text",
+                        }))
+                      }
+                      qualityScore={
+                        dsState.ctx.processing === "large"
+                          ? dsState.ctx.largeQuality?.score.overall
+                          : dsState.ctx.version.quality_score
+                      }
+                      issuesCount={
+                        dsState.ctx.processing === "large"
+                          ? dsState.ctx.largeQuality?.issues.length
+                          : undefined
+                      }
+                      onSelectQuestion={(q) => submit(q)}
+                    />
+                  </div>
+                ) : attachment?.columns ? (
+                  <div className="mt-6 text-left">
+                    <FirstReadCoach
+                      datasetName={attachment.name}
+                      rowCount={attachment.plannerSchema?.rows ?? 0}
+                      columns={attachment.columns.map((name) => ({ name, type: "text" }))}
+                      onSelectQuestion={(q) => submit(q)}
+                    />
+                  </div>
+                ) : (
+                  <div className="mt-6 grid gap-2">
+                    {starters.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => submit(s)}
+                        className="rounded-xl border border-border bg-muted px-4 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -668,6 +831,7 @@ function ChatPage() {
                     question={stripDatasetHeader(messages[idx - 1]?.content ?? "")}
                     onRun={runInLab}
                     onOpenLab={dsState.ctx ? openFullLab : undefined}
+                    defaultDatasetName={dsState.ctx?.displayName ?? attachment?.name}
                   />
                 )}
               </div>
@@ -681,7 +845,7 @@ function ChatPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin text-primary" /> Thinking…
+                  <Loader2 className="size-4 animate-spin text-primary" /> {planningStep ?? "Thinking…"}
                 </div>
               </>
             )}
@@ -831,22 +995,37 @@ function AssistantReply({
   question,
   onRun,
   onOpenLab,
+  defaultDatasetName,
 }: {
   content: string;
   question: string;
   onRun: (code: string, question: string) => void;
   onOpenLab?: ((code: string, question: string) => void) | undefined;
+  defaultDatasetName?: string | undefined;
 }) {
-  const code = extractCodeBlocks(content)
+  const [briefOpen, setBriefOpen] = useState(false);
+  const { cleanContent, trace } = useMemo(() => parseMessageTrace(content), [content]);
+  const code = extractCodeBlocks(cleanContent)
     .map((b) => b.code)
     .join("\n\n");
+
+  const effectiveDataset = trace?.datasetName ?? defaultDatasetName ?? "Active Dataset";
 
   return (
     <div className="max-w-[92%] rounded-2xl border border-border bg-card px-5 py-4 shadow-[0_18px_40px_-28px_var(--glow)]">
       <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-primary">DataSimplr AI</p>
-      <MarkdownMessage content={content} />
+      {trace && <PlanTraceabilityChip trace={trace} />}
+      <MarkdownMessage content={cleanContent} />
       <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3">
-        <CopyButton value={content} label="Copy reply" copiedLabel="Copied reply" />
+        <CopyButton value={cleanContent} label="Copy reply" copiedLabel="Copied reply" />
+        <button
+          type="button"
+          onClick={() => setBriefOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/20 transition-colors"
+        >
+          <FileText className="size-3.5" />
+          Executive Brief
+        </button>
         {code ? (
           <>
             <CopyButton value={code} label="Copy all code" copiedLabel="Copied code" />
@@ -869,6 +1048,17 @@ function AssistantReply({
           </>
         ) : null}
       </div>
+
+      <ExecutiveBriefDialog
+        open={briefOpen}
+        onOpenChange={setBriefOpen}
+        datasetName={effectiveDataset}
+        versionLabel={trace?.versionLabel}
+        engine={trace?.processing === "large" ? "DuckDB-WASM" : "Deterministic Data Engine"}
+        question={question}
+        content={cleanContent}
+        trace={trace}
+      />
     </div>
   );
 }

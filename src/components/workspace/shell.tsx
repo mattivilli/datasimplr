@@ -1,7 +1,8 @@
+import { clearDevBypass, isDevBypass } from "@/lib/dev-bypass";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, ChevronLeft, ChevronRight, CreditCard, Database, FileText, HelpCircle, LogOut, Menu, MessageSquare, Settings, Upload, Users, X } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, ClipboardList, CreditCard, Database, FileText, HelpCircle, LogOut, Menu, MessageSquare, Settings, Upload, Users, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ds/theme-toggle";
 import { LogoMark } from "@/components/ds/logo";
@@ -13,6 +14,7 @@ const nav = [
   { to: "/chat", label: "AI Chat", icon: MessageSquare },
   { to: "/analyze", label: "Upload & Analyze", icon: Upload },
   { to: "/datasets", label: "My Datasets", icon: Database },
+  { to: "/documents", label: "Document Studio", icon: ClipboardList },
   { to: "/analyses", label: "Past Analyses", icon: FileText },
   { to: "/team", label: "Team", icon: Users },
   { to: "/billing", label: "Plan & Billing", icon: CreditCard },
@@ -24,6 +26,14 @@ export function useProfile() {
   return useQuery({
     queryKey: ["profile"],
     queryFn: async () => {
+      if (isDevBypass()) {
+        return {
+          id: "dev-user-local",
+          email: "dev@datasimplr.local",
+          displayName: "Dev User",
+          avatarUrl: null,
+        };
+      }
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) return null;
       const { data } = await supabase
@@ -73,6 +83,7 @@ export function WorkspaceShell({
   };
 
   const signOut = async () => {
+    clearDevBypass();
     await queryClient.cancelQueries();
     queryClient.clear();
     await supabase.auth.signOut();

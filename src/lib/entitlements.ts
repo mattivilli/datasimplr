@@ -1,3 +1,4 @@
+import { isDevBypass } from "@/lib/dev-bypass";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PLAN_LIMITS, type PlanKey, type QuotaReason } from "@/lib/plans";
@@ -74,6 +75,9 @@ function isMissingFunction(error: { code?: string } | null): boolean {
 }
 
 export async function fetchEntitlements(): Promise<Entitlements | null> {
+  if (isDevBypass()) {
+    return UNENFORCED;
+  }
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return null;
   const { data, error } = await supabase.rpc("get_entitlements");

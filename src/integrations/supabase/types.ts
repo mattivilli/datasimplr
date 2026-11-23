@@ -229,6 +229,7 @@ export type Database = {
           original_filename: string | null
           row_count: number | null
           status: string
+          team_id: string | null
           updated_at: string
           user_id: string
         }
@@ -243,6 +244,7 @@ export type Database = {
           original_filename?: string | null
           row_count?: number | null
           status?: string
+          team_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -257,6 +259,7 @@ export type Database = {
           original_filename?: string | null
           row_count?: number | null
           status?: string
+          team_id?: string | null
           updated_at?: string
           user_id?: string
         }

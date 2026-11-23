@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -32,6 +32,7 @@ import {
 } from "@/lib/dataset-library";
 import { storedDatasetMode } from "@/lib/large-data/decide";
 import { LargeCleaningWorkspace } from "@/components/workspace/large-cleaning-workspace";
+import { FirstReadCoach } from "@/components/workspace/first-read-coach";
 
 export const Route = createFileRoute("/_authenticated/datasets/$id")({
   head: () => ({
@@ -48,6 +49,7 @@ const KIND_LABEL: Record<string, string> = { original: "Original", working: "Cle
 
 function DatasetWorkspace() {
   const { id } = Route.useParams();
+  const navigate = useNavigate();
   const [dataset, setDataset] = useState<DatasetRow | null>(null);
   const [versions, setVersions] = useState<DatasetVersionRow[]>([]);
   const [workingVersion, setWorkingVersion] = useState<DatasetVersionRow | null>(null);
@@ -318,6 +320,11 @@ function DatasetWorkspace() {
             </Link>
           </Button>
           <Button asChild size="sm" variant="outline">
+            <Link to="/documents" search={{ dataset: dataset.id }}>
+              Docs
+            </Link>
+          </Button>
+          <Button asChild size="sm" variant="outline">
             <Link to="/lab" search={{ dataset: dataset.id, version: undefined, sheet: undefined }}>
               PythonLab
             </Link>
@@ -334,6 +341,27 @@ function DatasetWorkspace() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-5">
           {error && <p className="text-sm text-destructive">{error}</p>}
+
+          <FirstReadCoach
+            datasetName={dataset.name}
+            rowCount={table.rows.length}
+            versionLabel={KIND_LABEL[workingVersion?.kind ?? "original"]}
+            columns={table.columns.map((name) => ({ name, type: "text" }))}
+            qualityScore={report.score.overall}
+            issuesCount={visibleIssues.length}
+            onSelectQuestion={(q) => {
+              void navigate({
+                to: "/chat",
+                search: {
+                  c: undefined,
+                  dataset: dataset.id,
+                  version: workingVersion?.id,
+                  sheet: undefined,
+                  explain: undefined,
+                },
+              });
+            }}
+          />
 
           <div className="panel p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">

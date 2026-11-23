@@ -1,3 +1,4 @@
+import { isDevBypass } from "@/lib/dev-bypass";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, FileText, MessageSquare, Sparkles, Upload } from "lucide-react";
@@ -25,6 +26,19 @@ function Dashboard() {
   const { data } = useQuery({
     queryKey: ["dashboard"],
     queryFn: async () => {
+      if (isDevBypass()) {
+        let devChats: { id: string; title: string; updated_at: string }[] = [];
+        try {
+          devChats = JSON.parse(localStorage.getItem("ds_dev_conversations") ?? "[]");
+        } catch {}
+        return {
+          chats: devChats.slice(0, 5),
+          analyses: [],
+          chatCount: devChats.length,
+          analysisCount: 0,
+          messageCount: devChats.length * 2,
+        };
+      }
       const [chats, analyses] = await Promise.all([
         supabase
           .from("conversations")

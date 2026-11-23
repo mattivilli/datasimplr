@@ -1,3 +1,4 @@
+import { isDevBypass } from "@/lib/dev-bypass";
 import { supabase } from "@/integrations/supabase/client";
 import { parseUploadedFile } from "./parse-file";
 import { tableToCsv, type Table } from "./analysis";
@@ -89,12 +90,24 @@ export async function saveDataset(params: {
 }
 
 export async function listDatasets(): Promise<DatasetRow[]> {
-  const { data, error } = await supabase
-    .from("datasets")
-    .select("*")
-    .order("updated_at", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  try {
+    const { data, error } = await supabase
+      .from("datasets")
+      .select("*")
+      .order("updated_at", { ascending: false });
+    if (error) {
+      if (isDevBypass()) {
+        return [];
+      }
+      throw error;
+    }
+    return data ?? [];
+  } catch (err) {
+    if (isDevBypass()) {
+      return [];
+    }
+    throw err;
+  }
 }
 
 export async function listDatasetsWithCurrentVersion(): Promise<

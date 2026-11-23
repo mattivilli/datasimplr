@@ -57,6 +57,17 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
     const authHeader = request.headers.get('authorization');
 
     if (!authHeader) {
+      // Local development only. import.meta.env.DEV is a build-time constant that
+      // is false in any production build, so no header can enable this there.
+      if (import.meta.env.DEV) {
+        return next({
+          context: {
+            supabase: {} as any,
+            userId: 'dev-user-local',
+            claims: { sub: 'dev-user-local', email: 'dev@datasimplr.local' } as any,
+          },
+        });
+      }
       throw new Error('Unauthorized: No authorization header provided');
     }
 
