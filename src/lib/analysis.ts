@@ -116,6 +116,23 @@ const isBlank = (v: string | undefined) => {
   return !s || NULLS.has(s.toLowerCase());
 };
 
+// Date.parse is lenient: V8 reads IDs such as "ORD-10001" or "INV-2024-001" as dates.
+// A value only counts as a date when it also has a recognisable date shape.
+const DATE_SHAPES: RegExp[] = [
+  /^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:[ T].*)?$/, // 2025-03-14, 2025/3/14, ISO with time
+  /^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}(?:[ T].*)?$/, // 3/14/2025, 14-03-25
+  /^\d{1,2}(?:st|nd|rd|th)?[ -](?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?[ ,-]+\d{2,4}/i, // 14 Mar 2025, 14-Mar-25
+  /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?[ -]+\d{1,2}(?:st|nd|rd|th)?,?[ -]+\d{2,4}/i, // Mar 14, 2025
+  /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?[ -]+\d{4}$/i, // March 2025
+  /^(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*,? (?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i, // Wed Jan 01 2025 ...
+];
+
+export function looksLikeDate(value: string): boolean {
+  const text = value.trim();
+  if (text.length <= 4 || Number.isFinite(Number(text))) return false;
+  return DATE_SHAPES.some((shape) => shape.test(text)) && !Number.isNaN(Date.parse(text));
+}
+
 export function detectTypes(table: Table): Record<string, ColumnType> {
   const types: Record<string, ColumnType> = {};
   for (let i = 0; i < table.columns.length; i++) {
@@ -127,7 +144,7 @@ export function detectTypes(table: Table): Record<string, ColumnType> {
     }
     const nums = values.filter((v) => Number.isFinite(parseNumber(v))).length;
     const bools = values.filter((v) => ["true", "false", "yes", "no", "y", "n"].includes(v.trim().toLowerCase())).length;
-    const dates = values.filter((v) => !Number.isFinite(Number(v)) && !Number.isNaN(Date.parse(v)) && v.length > 4).length;
+    const dates = values.filter((v) => looksLikeDate(v)).length;
     if (nums / values.length >= 0.9) types[name] = "numeric";
     else if (dates / values.length >= 0.8) types[name] = "date";
     else if (bools / values.length >= 0.9) types[name] = "boolean";
