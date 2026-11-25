@@ -80,6 +80,19 @@ type SavePayload = {
   findings: { label: string; value: string; note?: string }[];
 };
 
+/** What the app returns once a dataset is stored, so later steps can point at the saved copy. */
+export type SavedDatasetRef = { datasetId: string; versionId: string };
+
+/** Why this table cannot be saved, or null when it can. */
+function emptyReason(table: Table, file: File | null): string | null {
+  if (file && file.size === 0) return "This file is empty, so there is nothing to save. Upload a file that contains data.";
+  if (table.columns.length === 0) return "This dataset has no columns, so there is nothing to save.";
+  if (table.rows.length === 0) return "This dataset has no data rows, so there is nothing to save.";
+  const hasValue = table.rows.some((row) => row.some((cell) => String(cell ?? "").trim() !== ""));
+  if (!hasValue) return "Every cell in this dataset is blank, so there is nothing to save.";
+  return null;
+}
+
 export type SaveDatasetPayload = {
   file: File;
   name: string;
@@ -98,7 +111,7 @@ export function AnalyticsStudio({
   unlockLabel = "Unlock all findings",
 }: {
   onSave?: (payload: SavePayload) => Promise<void>;
-  onSaveDataset?: (payload: SaveDatasetPayload) => Promise<void>;
+  onSaveDataset?: (payload: SaveDatasetPayload) => Promise<SavedDatasetRef | void>;
   initialDataset?: { table: Table; sourceName: string; sourceFile: File; sheetName?: string | null } | null;
   initialLarge?: File | null;
   // Show only the first N findings; the rest render blurred behind an unlock CTA.
@@ -127,6 +140,7 @@ export function AnalyticsStudio({
   const [savingDataset, setSavingDataset] = useState(false);
   const [datasetError, setDatasetError] = useState<string | null>(null);
   const [savedDatasetName, setSavedDatasetName] = useState<string | null>(null);
+  const [savedRef, setSavedRef] = useState<SavedDatasetRef | null>(null);
   const [largeFile, setLargeFile] = useState<File | null>(initialLarge);
   const [largeBlocked, setLargeBlocked] = useState(false);
   const [largeShape, setLargeShape] = useState<{ rows: number | null; columns: number | null }>({ rows: null, columns: null });
@@ -150,6 +164,8 @@ export function AnalyticsStudio({
     setSourceFile(file);
     setSheetName(sheet);
     setSavedDatasetName(null);
+    setSavedRef(null);
+    setDatasetError(null);
     const nums = next.columns.filter((_, i) => {
       const values = next.rows.map((r) => r[i]).filter(Boolean);
       return values.length > 0;
@@ -278,13 +294,22 @@ export function AnalyticsStudio({
     }
   };
 
+  const saveBlocked = emptyReason(raw, sourceFile);
+
   const saveDataset = async () => {
-    if (!onSaveDataset || raw.rows.length === 0) return;
+    if (!onSaveDataset || savedRef) return;
+    const problem = emptyReason(raw, sourceFile);
+    if (problem) {
+      setDatasetError(problem);
+      return;
+    }
     setSavingDataset(true);
     setDatasetError(null);
     try {
-      const file = sourceFile ?? new File([tableToCsv(raw)], fileName ?? "pasted-data.csv", { type: "text/csv" });
-      await onSaveDataset({
+      // The uploaded file is saved as it came in. Pasted data is written out in full, with no row cap.
+      const csvName = `${(fileName ?? "pasted-data").replace(/\.[^.]+$/, "") || "pasted-data"}.csv`;
+      const file = sourceFile ?? new File([tableToCsv(raw, Number.POSITIVE_INFINITY)], csvName, { type: "text/csv" });
+      const ref = await onSaveDataset({
         file,
         name: fileName ?? "Pasted data",
         rowCount: raw.rows.length,
@@ -292,6 +317,19 @@ export function AnalyticsStudio({
         sheetName,
       });
       setSavedDatasetName(fileName ?? "Pasted data");
+      if (ref) {
+        setSavedRef(ref);
+        // From here on the active dataset is the saved file, so chat, the lab and later analysis use it.
+        void saveActiveDataset({
+          csv: tableToCsv(cleaned.table),
+          fileName: fileName ?? "pasted data",
+          columns: cleaned.table.columns,
+          fileBlob: file,
+          processing: "standard",
+          sampleRows: null,
+          datasetId: ref.datasetId,
+        });
+      }
     } catch (e) {
       setDatasetError(e instanceof Error ? e.message : "Could not save this dataset.");
     } finally {
@@ -497,20 +535,22 @@ export function AnalyticsStudio({
                 variant="outline"
                 size="sm"
                 onClick={saveDataset}
-                disabled={savingDataset || raw.rows.length === 0}
+                disabled={savingDataset || saveBlocked != null || savedRef != null}
+                title={saveBlocked ?? (savedRef ? "Already saved" : undefined)}
               >
                 {savingDataset ? (
                   <Loader2 className="mr-1.5 size-3.5 animate-spin" />
                 ) : (
                   <DatabaseZap className="mr-1.5 size-3.5" />
                 )}
-                Save to My Datasets
+                {savedRef ? "Saved to My Datasets" : "Save to My Datasets"}
               </Button>
               {savedDatasetName && (
                 <p className="flex items-center gap-1.5 text-xs text-primary">
-                  <Check className="size-3.5" /> Saved “{savedDatasetName}” — find it under My Datasets.
+                  <Check className="size-3.5" /> Saved “{savedDatasetName}” — find it under My Datasets. This saved file is the one used from here on.
                 </p>
               )}
+              {!savedDatasetName && saveBlocked && <p className="text-xs text-muted-foreground">{saveBlocked}</p>}
               {datasetError && <p className="text-xs text-destructive">{datasetError}</p>}
             </div>
           )}

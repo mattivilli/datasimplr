@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { WorkspaceShell } from "@/components/workspace/shell";
 import { AnalyticsStudio } from "@/components/workspace/analytics-studio";
-import { QuotaError, downloadVersionBlob, getDataset, getVersion, loadDatasetTable, saveDataset, versionFilename } from "@/lib/dataset-library";
+import { QuotaError, assertSavable, downloadVersionBlob, getDataset, getVersion, loadDatasetTable, saveDataset, versionFilename } from "@/lib/dataset-library";
 import { storedDatasetMode } from "@/lib/large-data/decide";
 import { useUpgrade } from "@/components/billing/upgrade";
 import { checkDatasetQuota, useEntitlements, useRefreshEntitlements } from "@/lib/entitlements";
@@ -104,14 +104,16 @@ function AnalyzePage() {
           })
         }
         onSaveDataset={async (payload) => {
+          assertSavable(payload);
           const reason = await checkDatasetQuota(payload.file.size);
           if (reason) {
             promptUpgrade(reason, payload.file.size);
             throw new Error(QUOTA_MESSAGES[reason]);
           }
           const { data: auth } = await supabase.auth.getUser();
+          let saved: { datasetId: string; versionId: string };
           try {
-            await saveDataset({
+            saved = await saveDataset({
               userId: auth.user!.id,
               file: payload.file,
               name: payload.name,
@@ -126,6 +128,7 @@ function AnalyzePage() {
             refreshEntitlements();
           }
           queryClient.invalidateQueries({ queryKey: ["datasets"] });
+          return saved;
         }}
         onSave={async (payload) => {
           const { data: auth } = await supabase.auth.getUser();

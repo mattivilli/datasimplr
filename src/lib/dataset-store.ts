@@ -12,6 +12,8 @@ export type StoredDataset = {
   processing?: "standard" | "large";
   /** Set when the last open was a working sample rather than the full file. */
   sampleRows?: number;
+  /** Set once this file has been saved to My Datasets, so later steps use the saved copy. */
+  datasetId?: string;
 };
 
 function openDb(): Promise<IDBDatabase> {
@@ -46,11 +48,17 @@ export async function saveActiveDataset(d: {
   fileBlob?: Blob | null;
   processing?: StoredDataset["processing"];
   sampleRows?: number | null;
+  datasetId?: string | null;
 }) {
   const existing = await loadActiveDataset();
   const fileBlob = d.fileBlob === null ? undefined : (d.fileBlob ?? existing?.fileBlob);
   const processing = d.processing ?? existing?.processing;
   const sampleRows = d.sampleRows === null ? undefined : (d.sampleRows ?? existing?.sampleRows);
+  // Keep the saved id only while it is still the same file.
+  const datasetId =
+    d.datasetId === null
+      ? undefined
+      : (d.datasetId ?? (existing && existing.fileName === d.fileName ? existing.datasetId : undefined));
   const row: StoredDataset = {
     csv: d.csv,
     fileName: d.fileName,
@@ -59,6 +67,7 @@ export async function saveActiveDataset(d: {
     ...(fileBlob ? { fileBlob } : {}),
     ...(processing ? { processing } : {}),
     ...(sampleRows ? { sampleRows } : {}),
+    ...(datasetId ? { datasetId } : {}),
   };
   try {
     const db = await openDb();

@@ -73,6 +73,7 @@ type Session = {
   excludedRows: number;
   sampled: LargeSessionInfo["sampled"];
   filtered: LargeSessionInfo["filtered"];
+  columnsSubset: LargeSessionInfo["columnsSubset"];
   timings: { loadMs: number; profileMs: number; qualityMs?: number };
   quality: LargeQuality | null;
   sampleCsv: string | null;
@@ -158,6 +159,7 @@ function snapshot(session: Session): LargeSessionInfo {
     excludedRows: session.excludedRows,
     sampled: session.sampled,
     filtered: session.filtered,
+    columnsSubset: session.columnsSubset,
     timings: { ...session.timings },
     parts: session.parts
       ? {
@@ -569,7 +571,8 @@ export async function openLargeFile(file: File, options: OpenOptions = {}): Prom
     const projected = keep
       .map((index) => `${quoteIdent(rawNames[index] ?? "")} AS ${quoteIdent(allCleanNames[index] ?? rawNames[index] ?? "")}`)
       .join(", ");
-    if (wanted && keep.length < rawNames.length) {
+    const columnsSubset = wanted && keep.length < rawNames.length ? { kept: keep.length, total: rawNames.length } : null;
+    if (columnsSubset) {
       notes.push(`Using ${keep.length.toLocaleString()} of ${rawNames.length.toLocaleString()} columns you selected. The original file is not changed.`);
     }
     const drop = structuralDropSql(rawNames);
@@ -637,6 +640,7 @@ export async function openLargeFile(file: File, options: OpenOptions = {}): Prom
             excludedRows,
             sampled: null,
             filtered: null,
+            columnsSubset,
             timings: { loadMs: 0, profileMs: 0 },
             quality: null,
             sampleCsv: null,
@@ -759,6 +763,7 @@ export async function openLargeFile(file: File, options: OpenOptions = {}): Prom
       excludedRows,
       sampled,
       filtered: options.filter ?? null,
+      columnsSubset,
       timings: { loadMs: 0, profileMs: 0 },
       quality: null,
       sampleCsv: null,

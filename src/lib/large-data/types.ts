@@ -39,6 +39,8 @@ export type LargeSessionInfo = {
   excludedRows: number;
   sampled: { rows: number; method: "random" | "first"; label: string } | null;
   filtered: { column: string; value: string } | null;
+  /** Set when only some of the file's columns were loaded. */
+  columnsSubset: { kept: number; total: number } | null;
   timings: { loadMs: number; profileMs: number; qualityMs?: number };
   /** Set when the file was split so it is not loaded as one table. Figures include every part. */
   parts: {

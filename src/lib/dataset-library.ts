@@ -22,6 +22,9 @@ function extOf(name: string) {
 // Supabase Storage + the datasets/dataset_versions tables. The dataset row
 // is the permanent identity; IndexedDB (dataset-store.ts) stays a same-device
 // working cache only, never the source of truth.
+export { EmptyDatasetError, assertSavable } from "./dataset-validation";
+import { assertSavable } from "./dataset-validation";
+
 export async function saveDataset(params: {
   userId: string;
   file: File;
@@ -30,6 +33,7 @@ export async function saveDataset(params: {
   columnCount: number;
   sheetName?: string | null;
 }): Promise<{ datasetId: string; versionId: string }> {
+  assertSavable(params);
   const datasetId = crypto.randomUUID();
   const versionId = crypto.randomUUID();
   const storageKey = `${params.userId}/${datasetId}/${versionId}/${params.file.name}`;
@@ -310,6 +314,7 @@ export async function saveWorkingFile(params: {
   existingWorkingVersion: DatasetVersionRow | null;
 }): Promise<DatasetVersionRow> {
   const { dataset, file, userId, qualityScore, rowCount, columnCount, existingWorkingVersion } = params;
+  assertSavable({ file, name: dataset.name, rowCount, columnCount });
 
   if (existingWorkingVersion) {
     const { error: upErr } = await supabase.storage
@@ -365,6 +370,7 @@ export async function finalizeDatasetFile(params: {
   columnCount: number;
 }): Promise<DatasetVersionRow> {
   const { dataset, file, userId, qualityScore, rowCount, columnCount } = params;
+  assertSavable({ file, name: dataset.name, rowCount, columnCount });
   const versions = await listVersions(dataset.id);
   const nextVersionNumber = Math.max(1, ...versions.map((v) => v.version_number)) + 1;
   const versionId = crypto.randomUUID();

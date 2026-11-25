@@ -20,7 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { WithPythonSplit } from "./with-python-split";
-import type { SaveDatasetPayload } from "./analytics-studio";
+import type { SavedDatasetRef, SaveDatasetPayload } from "./analytics-studio";
 
 const RANGES = rangeCopy();
 
@@ -42,7 +42,7 @@ export function LargeDatasetStudio({
   blockedColumns?: number | null;
   /** Reopen the last working sample after a refresh instead of the full file. */
   resumeSampleRows?: number | null;
-  onSaveDataset?: ((payload: SaveDatasetPayload) => Promise<void>) | undefined;
+  onSaveDataset?: ((payload: SaveDatasetPayload) => Promise<SavedDatasetRef | void>) | undefined;
   onBack: () => void;
   onStandard: (file: File) => void;
 }) {
@@ -267,7 +267,11 @@ export function LargeDatasetStudio({
   };
 
   const save = async () => {
-    if (!onSaveDataset || !info) return;
+    if (!onSaveDataset || !info || saved) return;
+    if (info.rowCount <= 0 || info.columnCount <= 0) {
+      setSaveError("This dataset has no data rows, so there is nothing to save.");
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     setSaveMessage(null);
@@ -288,13 +292,38 @@ export function LargeDatasetStudio({
         setSaved(true);
         setSaveMessage(`Saved ${savedParts} parts to My Datasets. They are grouped in the folder "${info.parts.stem}".`);
       } else {
-        await onSaveDataset({
-          file,
-          name: file.name.replace(/\.[^.]+$/, "") || file.name,
+        // A sample, a filtered extract or a column selection is a different file from the upload.
+        // Save the file that was actually analysed, so reopening it gives the same rows and columns.
+        const base = file.name.replace(/\.[^.]+$/, "") || file.name;
+        const isExtract = Boolean(info.sampled || info.filtered || info.columnsSubset);
+        let toSave = file;
+        let name = base;
+        if (isExtract) {
+          const engine = await import("@/lib/large-data/engine");
+          toSave = await engine.exportSession(info.id);
+          name = `${base} (${info.columnsSubset ? "selected columns" : info.sampled ? "sample" : "filtered"})`;
+        }
+        if (toSave.size === 0) throw new Error("This file is empty, so there is nothing to save.");
+        const ref = await onSaveDataset({
+          file: toSave,
+          name,
           rowCount: info.rowCount,
           columnCount: info.columnCount,
         });
         setSaved(true);
+        if (ref) {
+          // Later analysis, chat and the lab now use the saved copy.
+          void saveActiveDataset({
+            csv: sampleCsv ?? "",
+            fileName: toSave.name,
+            columns: info.columns.map((column) => column.name),
+            fileBlob: toSave,
+            processing: "large",
+            sampleRows: null,
+            datasetId: ref.datasetId,
+          });
+        }
+        if (isExtract) setSaveMessage(`Saved “${name}”. This saved file is the one used from here on.`);
       }
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "Could not save this dataset.";
@@ -364,7 +393,7 @@ export function LargeDatasetStudio({
               Choose a different file
             </Button>
             {onSaveDataset && info && (
-              <Button type="button" size="sm" onClick={() => void save()} disabled={saving}>
+              <Button type="button" size="sm" onClick={() => void save()} disabled={saving || saved || !info || info.rowCount <= 0}>
                 {saving ? "Saving…" : saved ? "Saved to My Datasets" : parts ? `Save ${parts.names.length} parts` : "Save dataset"}
               </Button>
             )}
