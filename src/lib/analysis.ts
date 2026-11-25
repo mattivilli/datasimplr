@@ -127,6 +127,9 @@ const DATE_SHAPES: RegExp[] = [
   /^(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*,? (?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i, // Wed Jan 01 2025 ...
 ];
 
+// Enough for ordinary files; very wide files list the first columns and say so.
+const PROFILE_MAX_COLUMNS = 60;
+
 export function looksLikeDate(value: string): boolean {
   const text = value.trim();
   if (text.length <= 4 || Number.isFinite(Number(text))) return false;
@@ -626,7 +629,8 @@ export function runTool(tool: ToolKey, table: Table): { summary: string; finding
   switch (tool) {
     case "profile": {
       const types = detectTypes(table);
-      const findings = table.columns.slice(0, 12).map((name, i) => {
+      const shown = table.columns.slice(0, PROFILE_MAX_COLUMNS);
+      const findings = shown.map((name, i) => {
         const unique = new Set(table.rows.map((r) => r[i])).size;
         return {
           label: name,
@@ -635,7 +639,9 @@ export function runTool(tool: ToolKey, table: Table): { summary: string; finding
         };
       });
       return {
-        summary: `${rowCount.toLocaleString()} rows across ${table.columns.length} columns — ${numeric.length} numeric, ${table.columns.length - numeric.length} other.`,
+        summary: `${rowCount.toLocaleString()} rows across ${table.columns.length} columns — ${numeric.length} numeric, ${table.columns.length - numeric.length} other.${
+          table.columns.length > shown.length ? ` Showing the first ${shown.length} columns.` : ""
+        }`,
         findings,
       };
     }
