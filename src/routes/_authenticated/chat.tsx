@@ -44,6 +44,7 @@ import {
   type PlanChipTrace,
 } from "@/components/workspace/plan-chip";
 import { FirstReadCoach } from "@/components/workspace/first-read-coach";
+import { useConfirm } from "@/components/confirm/confirm-provider";
 import { ExecutiveBriefDialog } from "@/components/workspace/executive-brief";
 import type { QueryOp } from "@/lib/dataset-query";
 
@@ -95,6 +96,7 @@ function ChatPage() {
   const { c, dataset, version, sheet, explain } = Route.useSearch();
   const navigate = useNavigate({ from: "/chat" });
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const ask = useServerFn(askAssistant);
   const plan = useServerFn(planDatasetQuery);
   const selection: DatasetSelection | null = dataset ? { datasetId: dataset, versionId: version, sheetName: sheet } : null;
@@ -641,6 +643,13 @@ function ChatPage() {
   };
 
   const removeChat = async (id: string) => {
+    const ok = await confirm({
+      title: "Delete this chat?",
+      description: "The whole conversation and its messages will be permanently deleted. This cannot be undone.",
+      confirmLabel: "Delete chat",
+      destructive: true,
+    });
+    if (!ok) return;
     if (isDevBypass()) {
       try {
         const stored = JSON.parse(localStorage.getItem("ds_dev_conversations") ?? "[]") as { id: string }[];

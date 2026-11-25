@@ -4,6 +4,7 @@ import { FileText, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { WorkspaceShell } from "@/components/workspace/shell";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/confirm/confirm-provider";
 
 export const Route = createFileRoute("/_authenticated/analyses/")({
   head: () => ({
@@ -36,7 +37,15 @@ function AnalysesPage() {
     },
   });
 
-  const remove = async (id: string) => {
+  const confirm = useConfirm();
+  const remove = async (id: string, title: string) => {
+    const ok = await confirm({
+      title: `Delete \u201c${title}\u201d?`,
+      description: "This permanently deletes the saved analysis and its results. This cannot be undone.",
+      confirmLabel: "Delete analysis",
+      destructive: true,
+    });
+    if (!ok) return;
     await supabase.from("analyses").delete().eq("id", id);
     queryClient.invalidateQueries({ queryKey: ["analyses"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -83,7 +92,7 @@ function AnalysesPage() {
               </div>
               <button
                 aria-label="Delete analysis"
-                onClick={() => remove(a.id)}
+                onClick={() => void remove(a.id, a.title)}
                 className="text-subtle hover:text-destructive"
               >
                 <Trash2 className="size-4" />

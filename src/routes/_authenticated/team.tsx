@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { CurrencyToggle, IntervalToggle, useCheckout } from "@/components/billing/upgrade";
 import { inviteTeammate } from "@/lib/billing.functions";
 import { useEntitlements, useRefreshEntitlements } from "@/lib/entitlements";
+import { useConfirm } from "@/components/confirm/confirm-provider";
 import {
   PRICES,
   TEAM_MAX_SEATS,
@@ -261,6 +262,7 @@ function TeamDetail({ team, myId }: { team: Team; myId: string }) {
     }
   };
 
+  const confirm = useConfirm();
   const act = async (fn: () => PromiseLike<{ error: { message: string } | null }>) => {
     setError(null);
     const { error: err } = await fn();
@@ -396,15 +398,22 @@ function TeamDetail({ team, myId }: { team: Team; myId: string }) {
                     <button
                       type="button"
                       aria-label={`Remove ${m.display_name}`}
-                      onClick={() =>
-                        act(() =>
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: `Remove ${m.display_name} from the team?`,
+                          description: "They lose access to everything shared with this team.",
+                          confirmLabel: "Remove member",
+                          destructive: true,
+                        });
+                        if (!ok) return;
+                        await act(() =>
                           supabase
                             .from("team_members")
                             .delete()
                             .eq("team_id", team.id)
                             .eq("user_id", m.user_id),
-                        )
-                      }
+                        );
+                      }}
                       className="p-1 text-muted-foreground hover:text-destructive"
                     >
                       <Trash2 className="size-4" />
@@ -440,9 +449,16 @@ function TeamDetail({ team, myId }: { team: Team; myId: string }) {
                       )}
                       <button
                         type="button"
-                        onClick={() =>
-                          act(() => supabase.from("team_invites").delete().eq("id", inv.id))
-                        }
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: "Revoke this invite?",
+                            description: "The invite link stops working straight away.",
+                            confirmLabel: "Revoke invite",
+                            destructive: true,
+                          });
+                          if (!ok) return;
+                          await act(() => supabase.from("team_invites").delete().eq("id", inv.id));
+                        }}
                         className="text-xs text-muted-foreground hover:text-destructive"
                       >
                         Revoke
@@ -457,11 +473,18 @@ function TeamDetail({ team, myId }: { team: Team; myId: string }) {
           {me && me.role !== "owner" && (
             <button
               type="button"
-              onClick={() =>
-                act(() =>
+              onClick={async () => {
+                const ok = await confirm({
+                  title: "Leave this team?",
+                  description: "You lose access to everything shared with it until someone invites you again.",
+                  confirmLabel: "Leave team",
+                  destructive: true,
+                });
+                if (!ok) return;
+                await act(() =>
                   supabase.from("team_members").delete().eq("team_id", team.id).eq("user_id", myId),
-                )
-              }
+                );
+              }}
               className="mt-5 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive"
             >
               <LogOut className="size-3.5" /> Leave team

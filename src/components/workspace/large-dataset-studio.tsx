@@ -21,6 +21,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { WithPythonSplit } from "./with-python-split";
 import type { SavedDatasetRef, SaveDatasetPayload } from "./analytics-studio";
+import { useNavigate } from "@tanstack/react-router";
+import { useConfirm } from "@/components/confirm/confirm-provider";
+import { DuplicateDatasetError } from "@/lib/dataset-validation";
 
 const RANGES = rangeCopy();
 
@@ -70,6 +73,10 @@ export function LargeDatasetStudio({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [alreadySaved, setAlreadySaved] = useState<{ id: string; name: string } | null>(null);
+  const confirm = useConfirm();
+  const navigate = useNavigate();
+  const savingRef = useRef(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const onStandardRef = useRef(onStandard);
   onStandardRef.current = onStandard;
@@ -267,30 +274,59 @@ export function LargeDatasetStudio({
   };
 
   const save = async () => {
-    if (!onSaveDataset || !info || saved) return;
+    if (!onSaveDataset || !info || saved || alreadySaved || savingRef.current) return;
     if (info.rowCount <= 0 || info.columnCount <= 0) {
       setSaveError("This dataset has no data rows, so there is nothing to save.");
       return;
     }
+    savingRef.current = true;
     setSaving(true);
     setSaveError(null);
     setSaveMessage(null);
     let savedParts = 0;
+    const notifyDuplicate = async (existing: { id: string; name: string }, what: string) => {
+      setAlreadySaved(existing);
+      setSaveMessage(`${what} already saved as \u201c${existing.name}\u201d. Nothing new was saved.`);
+      const open = await confirm({
+        title: "Already saved",
+        description: `\u201c${existing.name}\u201d already has this exact data in My Datasets, so nothing new was saved.`,
+        confirmLabel: "Open saved dataset",
+        cancelLabel: "Close",
+      });
+      if (open) await navigate({ to: "/datasets/$id", params: { id: existing.id } });
+    };
     try {
       if (info.parts) {
         const engine = await import("@/lib/large-data/engine");
         const parts = await engine.exportSplitParts(info.id);
+        let skipped = 0;
+        let firstDuplicate: { id: string; name: string } | null = null;
         for (const part of parts) {
-          await onSaveDataset({
-            file: part.file,
-            name: part.name,
-            rowCount: part.rowCount,
-            columnCount: info.columnCount,
-          });
-          savedParts += 1;
+          try {
+            await onSaveDataset({
+              file: part.file,
+              name: part.name,
+              rowCount: part.rowCount,
+              columnCount: info.columnCount,
+            });
+            savedParts += 1;
+          } catch (e) {
+            // A part that is already saved is skipped, so saving again never makes copies.
+            if (!(e instanceof DuplicateDatasetError)) throw e;
+            skipped += 1;
+            firstDuplicate ??= e.existing;
+          }
+        }
+        if (savedParts === 0 && firstDuplicate) {
+          await notifyDuplicate(firstDuplicate, "All parts are");
+          return;
         }
         setSaved(true);
-        setSaveMessage(`Saved ${savedParts} parts to My Datasets. They are grouped in the folder "${info.parts.stem}".`);
+        setSaveMessage(
+          `Saved ${savedParts} parts to My Datasets. They are grouped in the folder "${info.parts.stem}".${
+            skipped ? ` ${skipped} part${skipped === 1 ? " was" : "s were"} already saved and skipped.` : ""
+          }`,
+        );
       } else {
         // A sample, a filtered extract or a column selection is a different file from the upload.
         // Save the file that was actually analysed, so reopening it gives the same rows and columns.
@@ -304,15 +340,7 @@ export function LargeDatasetStudio({
           name = `${base} (${info.columnsSubset ? "selected columns" : info.sampled ? "sample" : "filtered"})`;
         }
         if (toSave.size === 0) throw new Error("This file is empty, so there is nothing to save.");
-        const ref = await onSaveDataset({
-          file: toSave,
-          name,
-          rowCount: info.rowCount,
-          columnCount: info.columnCount,
-        });
-        setSaved(true);
-        if (ref) {
-          // Later analysis, chat and the lab now use the saved copy.
+        const remember = (datasetId: string) =>
           void saveActiveDataset({
             csv: sampleCsv ?? "",
             fileName: toSave.name,
@@ -320,15 +348,31 @@ export function LargeDatasetStudio({
             fileBlob: toSave,
             processing: "large",
             sampleRows: null,
-            datasetId: ref.datasetId,
+            datasetId,
           });
+        let ref: SavedDatasetRef | void;
+        try {
+          ref = await onSaveDataset({
+            file: toSave,
+            name,
+            rowCount: info.rowCount,
+            columnCount: info.columnCount,
+          });
+        } catch (e) {
+          if (!(e instanceof DuplicateDatasetError)) throw e;
+          remember(e.existing.id);
+          await notifyDuplicate(e.existing, "This data is");
+          return;
         }
+        setSaved(true);
+        if (ref) remember(ref.datasetId);
         if (isExtract) setSaveMessage(`Saved “${name}”. This saved file is the one used from here on.`);
       }
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "Could not save this dataset.";
       setSaveError(savedParts > 0 ? `Saved ${savedParts} parts, then stopped. ${message}` : message);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -393,7 +437,7 @@ export function LargeDatasetStudio({
               Choose a different file
             </Button>
             {onSaveDataset && info && (
-              <Button type="button" size="sm" onClick={() => void save()} disabled={saving || saved || !info || info.rowCount <= 0}>
+              <Button type="button" size="sm" onClick={() => void save()} disabled={saving || saved || alreadySaved != null || !info || info.rowCount <= 0}>
                 {saving ? "Saving…" : saved ? "Saved to My Datasets" : parts ? `Save ${parts.names.length} parts` : "Save dataset"}
               </Button>
             )}

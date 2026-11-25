@@ -55,6 +55,9 @@ import { isDelimitedName } from "@/lib/large-data/sniff";
 import { LargeDatasetStudio } from "./large-dataset-studio";
 import { WithPythonSplit } from "@/components/workspace/with-python-split";
 import { loadActiveDataset, saveActiveDataset } from "@/lib/dataset-store";
+import { useNavigate } from "@tanstack/react-router";
+import { useConfirm } from "@/components/confirm/confirm-provider";
+import { DuplicateDatasetError } from "@/lib/dataset-validation";
 
 const sample = `region,month,revenue,units,refunds
 North,Jul,412300,1820,4200
@@ -148,6 +151,10 @@ export function AnalyticsStudio({
   const [fileNotice, setFileNotice] = useState<string | null>(null);
   const [boot, setBoot] = useState<"pending" | "done">(initialLarge || initialDataset ? "done" : "pending");
   const resumeSampleRef = useRef<number | null>(null);
+  const confirm = useConfirm();
+  const navigate = useNavigate();
+  const savingRef = useRef(false);
+  const [alreadySaved, setAlreadySaved] = useState<{ id: string; name: string } | null>(null);
 
   const table = cleaned.table;
   const types = useMemo(() => detectTypes(table), [table]);
@@ -165,6 +172,7 @@ export function AnalyticsStudio({
     setSheetName(sheet);
     setSavedDatasetName(null);
     setSavedRef(null);
+    setAlreadySaved(null);
     setDatasetError(null);
     const nums = next.columns.filter((_, i) => {
       const values = next.rows.map((r) => r[i]).filter(Boolean);
@@ -297,29 +305,21 @@ export function AnalyticsStudio({
   const saveBlocked = emptyReason(raw, sourceFile);
 
   const saveDataset = async () => {
-    if (!onSaveDataset || savedRef) return;
+    if (!onSaveDataset || savedRef || alreadySaved || savingRef.current) return;
     const problem = emptyReason(raw, sourceFile);
     if (problem) {
       setDatasetError(problem);
       return;
     }
+    savingRef.current = true;
     setSavingDataset(true);
     setDatasetError(null);
     try {
       // The uploaded file is saved as it came in. Pasted data is written out in full, with no row cap.
       const csvName = `${(fileName ?? "pasted-data").replace(/\.[^.]+$/, "") || "pasted-data"}.csv`;
       const file = sourceFile ?? new File([tableToCsv(raw, Number.POSITIVE_INFINITY)], csvName, { type: "text/csv" });
-      const ref = await onSaveDataset({
-        file,
-        name: fileName ?? "Pasted data",
-        rowCount: raw.rows.length,
-        columnCount: raw.columns.length,
-        sheetName,
-      });
-      setSavedDatasetName(fileName ?? "Pasted data");
-      if (ref) {
-        setSavedRef(ref);
-        // From here on the active dataset is the saved file, so chat, the lab and later analysis use it.
+      // From here on the active dataset is the saved file, so chat, the lab and later analysis use it.
+      const remember = (datasetId: string) =>
         void saveActiveDataset({
           csv: tableToCsv(cleaned.table),
           fileName: fileName ?? "pasted data",
@@ -327,12 +327,39 @@ export function AnalyticsStudio({
           fileBlob: file,
           processing: "standard",
           sampleRows: null,
-          datasetId: ref.datasetId,
+          datasetId,
         });
+      let ref: SavedDatasetRef | void;
+      try {
+        ref = await onSaveDataset({
+          file,
+          name: fileName ?? "Pasted data",
+          rowCount: raw.rows.length,
+          columnCount: raw.columns.length,
+          sheetName,
+        });
+      } catch (e) {
+        if (!(e instanceof DuplicateDatasetError)) throw e;
+        setAlreadySaved(e.existing);
+        remember(e.existing.id);
+        const open = await confirm({
+          title: "Already saved",
+          description: `\u201c${e.existing.name}\u201d already has this exact data in My Datasets, so nothing new was saved.`,
+          confirmLabel: "Open saved dataset",
+          cancelLabel: "Close",
+        });
+        if (open) await navigate({ to: "/datasets/$id", params: { id: e.existing.id } });
+        return;
+      }
+      setSavedDatasetName(fileName ?? "Pasted data");
+      if (ref) {
+        setSavedRef(ref);
+        remember(ref.datasetId);
       }
     } catch (e) {
       setDatasetError(e instanceof Error ? e.message : "Could not save this dataset.");
     } finally {
+      savingRef.current = false;
       setSavingDataset(false);
     }
   };
@@ -535,22 +562,27 @@ export function AnalyticsStudio({
                 variant="outline"
                 size="sm"
                 onClick={saveDataset}
-                disabled={savingDataset || saveBlocked != null || savedRef != null}
-                title={saveBlocked ?? (savedRef ? "Already saved" : undefined)}
+                disabled={savingDataset || saveBlocked != null || savedRef != null || alreadySaved != null}
+                title={saveBlocked ?? (savedRef || alreadySaved ? "Already saved" : undefined)}
               >
                 {savingDataset ? (
                   <Loader2 className="mr-1.5 size-3.5 animate-spin" />
                 ) : (
                   <DatabaseZap className="mr-1.5 size-3.5" />
                 )}
-                {savedRef ? "Saved to My Datasets" : "Save to My Datasets"}
+                {savedRef ? "Saved to My Datasets" : alreadySaved ? "Already saved" : "Save to My Datasets"}
               </Button>
               {savedDatasetName && (
                 <p className="flex items-center gap-1.5 text-xs text-primary">
                   <Check className="size-3.5" /> Saved “{savedDatasetName}” — find it under My Datasets. This saved file is the one used from here on.
                 </p>
               )}
-              {!savedDatasetName && saveBlocked && <p className="text-xs text-muted-foreground">{saveBlocked}</p>}
+              {alreadySaved && (
+                <p className="flex items-center gap-1.5 text-xs text-primary">
+                  <Check className="size-3.5" /> Already saved as “{alreadySaved.name}”. Nothing new was saved; that saved file is the one used from here on.
+                </p>
+              )}
+              {!savedDatasetName && !alreadySaved && saveBlocked && <p className="text-xs text-muted-foreground">{saveBlocked}</p>}
               {datasetError && <p className="text-xs text-destructive">{datasetError}</p>}
             </div>
           )}

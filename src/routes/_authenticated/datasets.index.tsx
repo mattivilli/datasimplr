@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Database, Download, FolderPlus, Loader2, MessageSquare, SquareArrowOutUpRight, Sparkles, Terminal } from "lucide-react";
+import { Database, Download, FolderPlus, Loader2, MessageSquare, SquareArrowOutUpRight, Sparkles, Terminal, Trash2 } from "lucide-react";
 import { WorkspaceShell, useProfile } from "@/components/workspace/shell";
 import { TeamShareSelect } from "@/components/billing/team-share-select";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,9 @@ import {
   unsortedCount,
   type FolderPrefs,
 } from "@/lib/dataset-folders";
-import { downloadDatasetFile, getVersion, listDatasetsWithCurrentVersion, type DatasetRow } from "@/lib/dataset-library";
+import { deleteDataset, downloadDatasetFile, getVersion, listDatasetsWithCurrentVersion, type DatasetRow } from "@/lib/dataset-library";
+import { useConfirm } from "@/components/confirm/confirm-provider";
+import { useRefreshEntitlements } from "@/lib/entitlements";
 
 const STATUS_LABEL: Record<string, string> = {
   uploaded: "Original",
@@ -55,6 +57,10 @@ function DatasetsPage() {
   });
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const confirm = useConfirm();
+  const refreshEntitlements = useRefreshEntitlements();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<FolderPrefs>({ folders: [], byId: {} });
   const [foldersReady, setFoldersReady] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState("__all__");
@@ -73,6 +79,29 @@ function DatasetsPage() {
   const remember = (next: FolderPrefs) => {
     setPrefs(next);
     saveFolderPrefs(next);
+  };
+
+  const remove = async (dataset: DatasetRow) => {
+    const ok = await confirm({
+      title: `Delete \u201c${dataset.name}\u201d?`,
+      description:
+        "This permanently deletes the dataset, every saved version of it (original, working and finalized) and its cleaning history. This cannot be undone.",
+      confirmLabel: "Delete dataset",
+      destructive: true,
+    });
+    if (!ok) return;
+    setDeletingId(dataset.id);
+    setDeleteError(null);
+    try {
+      await deleteDataset(dataset.id);
+      await queryClient.invalidateQueries({ queryKey: ["datasets"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      refreshEntitlements();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Could not delete that dataset.");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const download = async (dataset: DatasetRow) => {
@@ -157,6 +186,23 @@ function DatasetsPage() {
                 )}
                 Download
               </Button>
+              {(!profile || d.user_id === profile.id) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => void remove(d)}
+                  disabled={deletingId === d.id}
+                  aria-label={`Delete ${d.name}`}
+                >
+                  {deletingId === d.id ? (
+                    <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-1.5 size-3.5" />
+                  )}
+                  Delete
+                </Button>
+              )}
             </div>
             {foldersReady && (
               <label className="mt-3 block max-w-xs text-[11px] text-muted-foreground">
@@ -227,6 +273,7 @@ function DatasetsPage() {
       )}
 
       {downloadError && <p className="mb-4 text-sm text-destructive">{downloadError}</p>}
+      {deleteError && <p className="mb-4 text-sm text-destructive">{deleteError}</p>}
 
       {foldersReady && rows.length > 0 && (
         <div className="mb-4 space-y-3" data-testid="dataset-folders">

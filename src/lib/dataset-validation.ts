@@ -17,3 +17,13 @@ export function assertSavable(params: { file: File | null | undefined; name: str
     throw new EmptyDatasetError("This dataset has no data rows, so there is nothing to save. A header row alone is not enough.");
   }
 }
+
+/** The same data is already saved. Carries the saved copy so the app can point to it. */
+export class DuplicateDatasetError extends Error {
+  override readonly name = "DuplicateDatasetError";
+  readonly existing: { id: string; name: string };
+  constructor(existing: { id: string; name: string }) {
+    super(`\u201c${existing.name}\u201d already has this exact data saved in My Datasets, so it was not saved again.`);
+    this.existing = existing;
+  }
+}

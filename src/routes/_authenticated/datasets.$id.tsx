@@ -8,6 +8,7 @@ import {
   Download,
   Loader2,
   ShieldCheck,
+  Trash2,
   Undo2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,7 +16,9 @@ import { WorkspaceShell, useProfile } from "@/components/workspace/shell";
 import { Button } from "@/components/ui/button";
 import type { Table } from "@/lib/analysis";
 import { analyzeQuality, applyIssue, type QualityIssue, type QualityReport } from "@/lib/data-quality";
+import { useConfirm } from "@/components/confirm/confirm-provider";
 import {
+  deleteDataset,
   deleteCleaningLogEntries,
   downloadDatasetFile,
   finalizeDataset,
@@ -65,6 +68,8 @@ function DatasetWorkspace() {
   const [undoing, setUndoing] = useState(false);
   const [largeMode, setLargeMode] = useState(false);
   const { data: profile } = useProfile();
+  const confirm = useConfirm();
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -255,6 +260,34 @@ function DatasetWorkspace() {
     }
   };
 
+  const removeDataset = async () => {
+    if (!dataset) return;
+    const ok = await confirm({
+      title: `Delete \u201c${dataset.name}\u201d?`,
+      description:
+        "This permanently deletes the dataset, every saved version of it (original, working and finalized) and its cleaning history. This cannot be undone.",
+      confirmLabel: "Delete dataset",
+      destructive: true,
+    });
+    if (!ok) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteDataset(dataset.id);
+      await navigate({ to: "/datasets" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete that dataset.");
+      setDeleting(false);
+    }
+  };
+
+  const deleteButton =
+    dataset && !(profile && dataset.user_id !== profile.id) ? (
+      <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => void removeDataset()} disabled={deleting}>
+        {deleting ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Trash2 className="mr-1.5 size-3.5" />} Delete
+      </Button>
+    ) : null;
+
   const download = async () => {
     if (!dataset) return;
     const current = dataset.current_version_id ? await getVersion(dataset.current_version_id) : null;
@@ -285,7 +318,7 @@ function DatasetWorkspace() {
   if (dataset && largeMode) {
     const ownerOnly = !!profile && dataset.user_id !== profile.id;
     return (
-      <WorkspaceShell title={dataset.name} subtitle="Large dataset">
+      <WorkspaceShell title={dataset.name} subtitle="Large dataset" actions={deleteButton}>
         <LargeCleaningWorkspace dataset={dataset} initialVersions={versions} readOnly={ownerOnly} />
       </WorkspaceShell>
     );
@@ -329,6 +362,7 @@ function DatasetWorkspace() {
               PythonLab
             </Link>
           </Button>
+          {deleteButton}
         </div>
       }
     >

@@ -22,8 +22,81 @@ function extOf(name: string) {
 // Supabase Storage + the datasets/dataset_versions tables. The dataset row
 // is the permanent identity; IndexedDB (dataset-store.ts) stays a same-device
 // working cache only, never the source of truth.
-export { EmptyDatasetError, assertSavable } from "./dataset-validation";
-import { assertSavable } from "./dataset-validation";
+export { DuplicateDatasetError, EmptyDatasetError, assertSavable } from "./dataset-validation";
+import { DuplicateDatasetError, assertSavable } from "./dataset-validation";
+import { clearActiveDataset, loadActiveDataset } from "./dataset-store";
+
+async function sha256Hex(blob: Blob): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Looks for an already-saved dataset of yours with exactly the same bytes. Size, rows and
+ * columns narrow it down first, then the stored original is compared by SHA-256, so two
+ * different files are never mistaken for each other.
+ */
+export async function findDuplicateDataset(params: {
+  userId: string;
+  file: File;
+  rowCount: number;
+  columnCount: number;
+}): Promise<{ id: string; name: string } | null> {
+  const all = await listDatasets();
+  const candidates = all
+    .filter(
+      (d) =>
+        d.user_id === params.userId &&
+        d.file_size === params.file.size &&
+        (d.row_count == null || d.row_count === params.rowCount) &&
+        (d.column_count == null || d.column_count === params.columnCount),
+    )
+    .slice(0, 5);
+  if (!candidates.length) return null;
+  const hash = await sha256Hex(params.file);
+  for (const d of candidates) {
+    const original = (await listVersions(d.id)).find((v) => v.kind === "original");
+    if (!original) continue;
+    try {
+      if ((await sha256Hex(await downloadVersionBlob(original))) === hash) return { id: d.id, name: d.name };
+    } catch {
+      /* A file that cannot be read is not treated as a match. */
+    }
+  }
+  return null;
+}
+
+export async function assertNotDuplicate(params: {
+  userId: string | null | undefined;
+  file: File;
+  rowCount: number;
+  columnCount: number;
+}): Promise<void> {
+  if (!params.userId) return;
+  const existing = await findDuplicateDataset({ ...params, userId: params.userId });
+  if (existing) throw new DuplicateDatasetError(existing);
+}
+
+/**
+ * Deletes a dataset you own: the row (versions and cleaning history go with it), then every
+ * stored file. If the active dataset in this browser is this one, it is cleared too.
+ */
+export async function deleteDataset(id: string): Promise<void> {
+  const keys = (await listVersions(id)).map((v) => v.storage_key).filter((key): key is string => Boolean(key));
+  const { data, error } = await supabase.from("datasets").delete().eq("id", id).select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error("This dataset could not be deleted. Only its owner can delete it.");
+  if (keys.length) {
+    const { error: removeError } = await supabase.storage.from(DATASET_BUCKET).remove(keys);
+    if (removeError) console.error("Dataset deleted, but some stored files could not be removed", removeError.message);
+  }
+  try {
+    const active = await loadActiveDataset();
+    if (active?.datasetId === id) await clearActiveDataset();
+  } catch {
+    /* Nothing active to clear. */
+  }
+}
 
 export async function saveDataset(params: {
   userId: string;

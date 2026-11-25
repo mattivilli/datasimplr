@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { WorkspaceShell } from "@/components/workspace/shell";
 import { AnalyticsStudio } from "@/components/workspace/analytics-studio";
-import { QuotaError, assertSavable, downloadVersionBlob, getDataset, getVersion, loadDatasetTable, saveDataset, versionFilename } from "@/lib/dataset-library";
+import { QuotaError, assertNotDuplicate, assertSavable, downloadVersionBlob, getDataset, getVersion, loadDatasetTable, saveDataset, versionFilename } from "@/lib/dataset-library";
 import { storedDatasetMode } from "@/lib/large-data/decide";
 import { useUpgrade } from "@/components/billing/upgrade";
 import { checkDatasetQuota, useEntitlements, useRefreshEntitlements } from "@/lib/entitlements";
@@ -105,6 +105,14 @@ function AnalyzePage() {
         }
         onSaveDataset={async (payload) => {
           assertSavable(payload);
+          const { data: who } = await supabase.auth.getUser();
+          // Same data already saved? Say so before any upload or upgrade prompt.
+          await assertNotDuplicate({
+            userId: who.user?.id,
+            file: payload.file,
+            rowCount: payload.rowCount,
+            columnCount: payload.columnCount,
+          });
           const reason = await checkDatasetQuota(payload.file.size);
           if (reason) {
             promptUpgrade(reason, payload.file.size);
