@@ -1,17 +1,20 @@
 import * as duckdb from "@duckdb/duckdb-wasm";
 import ehWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url";
 import mvpWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url";
-import ehWasm from "@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url";
-import mvpWasm from "@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url";
 
 export type DuckContext = {
   db: duckdb.AsyncDuckDB;
   conn: duckdb.AsyncDuckDBConnection;
 };
 
+// The engine .wasm files are 33 MB and 38 MB, over Cloudflare Workers' 25 MiB limit for
+// static assets, so they cannot ship with the site. They load from jsDelivr, pinned to the
+// installed @duckdb/duckdb-wasm version. The small worker scripts stay on our own origin.
+const CDN = duckdb.getJsDelivrBundles();
+
 const BUNDLES: duckdb.DuckDBBundles = {
-  mvp: { mainModule: mvpWasm, mainWorker: mvpWorker },
-  eh: { mainModule: ehWasm, mainWorker: ehWorker },
+  mvp: { mainModule: CDN.mvp.mainModule, mainWorker: mvpWorker },
+  ...(CDN.eh ? { eh: { mainModule: CDN.eh.mainModule, mainWorker: ehWorker } } : {}),
 };
 
 let opening: Promise<DuckContext> | null = null;
