@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, Upload } from "lucide-react";
 import { TOOLS, type ToolKey } from "@/lib/analysis";
-import { LARGE_DATA, rangeCopy, workingCopyMessage } from "@/lib/large-data/config";
+import { describeBlock, LARGE_DATA, rangeCopy } from "@/lib/large-data/config";
+import { ColumnPicker } from "./column-picker";
 import { DatasetTooLargeError, UseStandardPath } from "@/lib/large-data/decide";
-import { sniffTabularText } from "@/lib/large-data/sniff";
+import { estimateDataRows, sniffTabularText } from "@/lib/large-data/sniff";
 import type { AnalysisRequest, LargeQuality, LargeSessionInfo, PreviewPage, ProgressStep } from "@/lib/large-data/types";
 import type { QueryResult } from "@/lib/dataset-query";
 import { saveActiveDataset } from "@/lib/dataset-store";
@@ -26,6 +27,8 @@ const RANGES = rangeCopy();
 export function LargeDatasetStudio({
   file,
   blocked,
+  blockedRows = null,
+  blockedColumns = null,
   resumeSampleRows,
   onSaveDataset,
   onBack,
@@ -34,6 +37,9 @@ export function LargeDatasetStudio({
   file: File;
   /** The file was already classified as above the supported range. */
   blocked?: boolean;
+  /** Row and column counts from the intake check, so the message can say which one is too big. */
+  blockedRows?: number | null;
+  blockedColumns?: number | null;
   /** Reopen the last working sample after a refresh instead of the full file. */
   resumeSampleRows?: number | null;
   onSaveDataset?: ((payload: SaveDatasetPayload) => Promise<void>) | undefined;
@@ -47,7 +53,8 @@ export function LargeDatasetStudio({
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [tooLarge, setTooLarge] = useState(blocked ?? false);
-  const [copyOffer, setCopyOffer] = useState<string | null>(blocked ? workingCopyMessage() : null);
+  const [blockRows, setBlockRows] = useState<number | null>(blockedRows);
+  const [copyOffer, setCopyOffer] = useState<string | null>(blocked ? describeBlock(blockedRows, blockedColumns).body : null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [filterColumn, setFilterColumn] = useState("");
   const [filterValue, setFilterValue] = useState("");
@@ -80,13 +87,17 @@ export function LargeDatasetStudio({
     if (blocked) {
       setTooLarge(true);
       setError(null);
-      setCopyOffer(workingCopyMessage());
-      void sniffTabularText(file).then((sniff) => {
-        if (!cancelled) {
-          setHeaders(sniff.header);
-          setExtractColumn(sniff.header[0] ?? "");
-        }
-      });
+      setBlockRows(blockedRows);
+      setCopyOffer(describeBlock(blockedRows, blockedColumns).body);
+      void (async () => {
+        const sniff = await sniffTabularText(file);
+        const estimated = blockedRows ?? ((await estimateDataRows(file, sniff).catch(() => 0)) || null);
+        if (cancelled) return;
+        setHeaders(sniff.header);
+        setExtractColumn(sniff.header[0] ?? "");
+        setBlockRows(estimated);
+        setCopyOffer(describeBlock(estimated, blockedColumns ?? (sniff.header.length || null)).body);
+      })();
       return;
     }
     setTooLarge(false);
@@ -148,8 +159,12 @@ export function LargeDatasetStudio({
         if (reason instanceof DatasetTooLargeError) {
           setTooLarge(true);
           setError(null);
-          setCopyOffer(workingCopyMessage());
           const sniff = await sniffTabularText(file);
+          // The engine may fail before it knows the row count (for example out of memory).
+          // Estimate it so the message says which dimension is too big.
+          const estimated = reason.rows ?? ((await estimateDataRows(file, sniff).catch(() => 0)) || null);
+          setBlockRows(estimated);
+          setCopyOffer(describeBlock(estimated, sniff.header.length || null).body);
           setHeaders(sniff.header);
           setExtractColumn(sniff.header[0] ?? "");
           return;
@@ -212,7 +227,7 @@ export function LargeDatasetStudio({
     }
   };
 
-  const openExtract = async (options: { sampleRows?: number; filter?: { column: string; value: string } }) => {
+  const openExtract = async (options: { sampleRows?: number; filter?: { column: string; value: string }; columns?: string[] }) => {
     setBusy(true);
     setError(null);
     setCopyOffer(null);
@@ -236,7 +251,13 @@ export function LargeDatasetStudio({
     } catch (reason) {
       if (reason instanceof DatasetTooLargeError) {
         setTooLarge(true);
-        setCopyOffer(options.sampleRows ? workingCopyMessage() : `${reason.message} The filtered extract is still outside the supported range.`);
+        setCopyOffer(
+          options.sampleRows
+            ? describeBlock(blockRows, headers.length || null).body
+            : options.columns
+              ? `${reason.message} The selected columns are still outside the supported range. Choose fewer columns.`
+              : `${reason.message} The filtered extract is still outside the supported range.`,
+        );
       } else {
         setError(reason instanceof Error ? reason.message : "Could not open that extract.");
       }
@@ -283,6 +304,7 @@ export function LargeDatasetStudio({
     }
   };
 
+  const block = describeBlock(blockRows, headers.length || blockedColumns);
   const hasRevenue = headers.some((name) => /quantity|^qty$/i.test(name)) && headers.some((name) => /unit.?price|^price$/i.test(name));
   const parts = info?.parts ?? null;
   const from = preview ? preview.offset + 1 : 0;
@@ -293,20 +315,19 @@ export function LargeDatasetStudio({
       <AlertDialog open={copyOffer != null} onOpenChange={(open) => { if (!open) setCopyOffer(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Prepare a working file</AlertDialogTitle>
+            <AlertDialogTitle>{block.title}</AlertDialogTitle>
             <AlertDialogDescription>{copyOffer}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={onBack}>Cancel</AlertDialogCancel>
             <Button type="button" variant="outline" onClick={() => setCopyOffer(null)}>
-              Filter first
+              {block.kind === "wide" ? "Choose columns" : "Filter first"}
             </Button>
-            <AlertDialogAction
-              disabled={busy}
-              onClick={() => void openExtract({ sampleRows: LARGE_DATA.sampleOfferRows })}
-            >
-              Prepare working file
-            </AlertDialogAction>
+            {block.sampleRows != null && (
+              <AlertDialogAction disabled={busy} onClick={() => void openExtract({ sampleRows: block.sampleRows ?? LARGE_DATA.sampleOfferRows })}>
+                {block.kind === "wide" ? `Use a ${block.sampleRows.toLocaleString()}-row sample` : "Prepare working file"}
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -373,21 +394,35 @@ export function LargeDatasetStudio({
 
         {tooLarge && (
           <div className="panel space-y-3 p-5" data-testid="large-too-big">
-            <p className="text-sm font-semibold">This dataset is larger than the currently supported processing range.</p>
+            <p className="text-sm font-semibold">{block.headline}</p>
+            {block.kind === "wide" && <p className="text-sm text-muted-foreground">{block.body}</p>}
             <p className="text-sm text-muted-foreground">You can:</p>
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                disabled={busy}
-                onClick={() => void openExtract({ sampleRows: LARGE_DATA.sampleOfferRows })}
-              >
-                Prepare a {LARGE_DATA.sampleOfferRows.toLocaleString()}-row working file
-              </Button>
+              {block.sampleRows != null && (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void openExtract({ sampleRows: block.sampleRows ?? LARGE_DATA.sampleOfferRows })}
+                >
+                  {block.kind === "wide"
+                    ? `Use a ${block.sampleRows.toLocaleString()}-row sample (all columns)`
+                    : `Prepare a ${block.sampleRows.toLocaleString()}-row working file`}
+                </Button>
+              )}
               <Button type="button" variant="outline" size="sm" onClick={onBack}>
                 Cancel
               </Button>
             </div>
+            {block.kind !== "tall" && headers.length > 1 && (
+              <ColumnPicker
+                headers={headers}
+                rows={blockRows}
+                maxCells={LARGE_DATA.supportedMaxCells}
+                busy={busy}
+                onOpen={(columns) => void openExtract({ columns })}
+              />
+            )}
             <div className="flex flex-wrap items-end gap-2">
               <label className="text-xs">
                 Filter before analysis

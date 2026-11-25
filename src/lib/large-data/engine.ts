@@ -492,7 +492,7 @@ export async function openLargeFile(file: File, options: OpenOptions = {}): Prom
   if (file.size > LARGE_DATA.sampleMaxBytes) {
     throw new DatasetTooLargeError(unsupportedMessage(null), null, file.size);
   }
-  const key = options.cacheKey ?? `${file.name}|${file.size}|${file.lastModified}|${options.sampleRows ?? ""}|${options.filter?.column ?? ""}=${options.filter?.value ?? ""}`;
+  const key = options.cacheKey ?? `${file.name}|${file.size}|${file.lastModified}|${options.sampleRows ?? ""}|${options.filter?.column ?? ""}=${options.filter?.value ?? ""}|${options.columns?.join("\u0001") ?? ""}`;
   const cached = keyIndex.get(key);
   if (cached && sessions.has(cached)) return snapshot(sessions.get(cached)!);
 
@@ -521,10 +521,11 @@ export async function openLargeFile(file: File, options: OpenOptions = {}): Prom
   let likelySplit = false;
   if (!options.sampleRows && !options.filter) {
     const estimate = await estimateDataRows(file, sniff);
-    const decision = chooseEstimatedMode({ rows: estimate, bytes: file.size, columns: sniff.header.length });
-    if (decision === "standard") throw new UseStandardPath();
+    const columnCount = options.columns?.length ? options.columns.length : sniff.header.length;
+    const decision = chooseEstimatedMode({ rows: estimate, bytes: file.size, columns: columnCount });
+    if (decision === "standard" && !options.columns) throw new UseStandardPath();
     const canSplit = file.size <= LARGE_DATA.sampleMaxBytes && (estimate <= 0 || estimate > LARGE_DATA.splitAtRows);
-    if (decision === "unsupported" && !canSplit) throw new DatasetTooLargeError(unsupportedMessage(estimate), estimate, file.size);
+    if (decision === "unsupported" && !canSplit) throw new DatasetTooLargeError(unsupportedMessage(estimate, columnCount), estimate, file.size);
     likelySplit = decision === "unsupported" || estimate > LARGE_DATA.splitAtRows * 0.85;
     state.rows = estimate ? `About ${estimate.toLocaleString()} rows` : "Counting rows";
   }
@@ -558,8 +559,19 @@ export async function openLargeFile(file: File, options: OpenOptions = {}): Prom
     rawNames = rawNames.filter((name) => name !== "_ds_row");
     if (!rawNames.length) throw new Error("That file has no columns.");
     const used = new Set<string>(["_ds_row"]);
-    const cleanNames = rawNames.map((name) => uniqueName(name, used));
-    const projected = rawNames.map((raw, index) => `${quoteIdent(raw)} AS ${quoteIdent(cleanNames[index] ?? raw)}`).join(", ");
+    const allCleanNames = rawNames.map((name) => uniqueName(name, used));
+    const wanted = options.columns?.length
+      ? new Set(options.columns.map((name) => resolveName(rawNames, name)).filter((name): name is string => name != null))
+      : null;
+    const keep = rawNames.map((_, index) => index).filter((index) => !wanted || wanted.has(rawNames[index] ?? ""));
+    if (!keep.length) throw new Error("None of the selected columns were found in that file.");
+    const cleanNames = keep.map((index) => allCleanNames[index] ?? rawNames[index] ?? "");
+    const projected = keep
+      .map((index) => `${quoteIdent(rawNames[index] ?? "")} AS ${quoteIdent(allCleanNames[index] ?? rawNames[index] ?? "")}`)
+      .join(", ");
+    if (wanted && keep.length < rawNames.length) {
+      notes.push(`Using ${keep.length.toLocaleString()} of ${rawNames.length.toLocaleString()} columns you selected. The original file is not changed.`);
+    }
     const drop = structuralDropSql(rawNames);
     let excludedRows = 0;
     let precounted: number | null = null;
@@ -594,7 +606,7 @@ export async function openLargeFile(file: File, options: OpenOptions = {}): Prom
       }
     };
     if (precounted != null) {
-      if (!options.filter && chooseProcessingMode({ rows: precounted, bytes: file.size, columns: cleanNames.length }) === "standard") {
+      if (!options.filter && !options.columns && chooseProcessingMode({ rows: precounted, bytes: file.size, columns: cleanNames.length }) === "standard") {
         await releaseFile();
         throw new UseStandardPath();
       }
@@ -662,7 +674,7 @@ export async function openLargeFile(file: File, options: OpenOptions = {}): Prom
       }
       if (precounted > LARGE_DATA.supportedMaxRows) {
         await releaseFile();
-        throw new DatasetTooLargeError(unsupportedMessage(precounted), precounted, file.size);
+        throw new DatasetTooLargeError(unsupportedMessage(precounted, cleanNames.length), precounted, file.size);
       }
     }
     state.schema = "done";
@@ -719,9 +731,9 @@ export async function openLargeFile(file: File, options: OpenOptions = {}): Prom
       } catch {
         /* the handle may already be gone */
       }
-      throw new DatasetTooLargeError(unsupportedMessage(rowCount), rowCount, file.size);
+      throw new DatasetTooLargeError(unsupportedMessage(rowCount, cleanNames.length), rowCount, file.size);
     }
-    if (!options.sampleRows && !options.filter && chooseProcessingMode({ rows: rowCount, bytes: file.size, columns: cleanNames.length }) === "standard") {
+    if (!options.sampleRows && !options.filter && !options.columns && chooseProcessingMode({ rows: rowCount, bytes: file.size, columns: cleanNames.length }) === "standard") {
       await dropTable(ctx, table);
       try {
         await ctx.db.dropFile(fileToken);

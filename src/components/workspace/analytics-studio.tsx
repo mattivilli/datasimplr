@@ -129,6 +129,7 @@ export function AnalyticsStudio({
   const [savedDatasetName, setSavedDatasetName] = useState<string | null>(null);
   const [largeFile, setLargeFile] = useState<File | null>(initialLarge);
   const [largeBlocked, setLargeBlocked] = useState(false);
+  const [largeShape, setLargeShape] = useState<{ rows: number | null; columns: number | null }>({ rows: null, columns: null });
   const [intake, setIntake] = useState<{ name: string; sizeLabel: string; status: string } | null>(null);
   const [fileNotice, setFileNotice] = useState<string | null>(null);
   const [boot, setBoot] = useState<"pending" | "done">(initialLarge || initialDataset ? "done" : "pending");
@@ -234,6 +235,7 @@ export function AnalyticsStudio({
           const sampleRows = resume?.sampleRows;
           resumeSampleRef.current = sampleRows ?? null;
           setLargeBlocked(decision.mode === "unsupported" && sampleRows == null && !opensAsSplit(decision));
+          setLargeShape({ rows: decision.rows, columns: decision.columns });
           void saveActiveDataset({
             csv: "",
             fileName: file.name,
@@ -353,6 +355,8 @@ export function AnalyticsStudio({
       <LargeDatasetStudio
         file={largeFile}
         blocked={largeBlocked}
+        blockedRows={largeShape.rows}
+        blockedColumns={largeShape.columns}
         resumeSampleRows={resumeSampleRef.current}
         onSaveDataset={onSaveDataset}
         onBack={() => {

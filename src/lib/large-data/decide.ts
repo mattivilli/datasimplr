@@ -1,4 +1,4 @@
-import { chooseEstimatedMode, chooseProcessingMode, LARGE_DATA, type ProcessingMode } from "./config";
+import { chooseEstimatedMode, chooseProcessingMode, describeBlock, LARGE_DATA, type ProcessingMode } from "./config";
 import { estimateDataRows, isDelimitedName, sniffTabularText, type Sniff } from "./sniff";
 
 const SPREADSHEET_CAP = 50 * 1024 * 1024;
@@ -9,7 +9,7 @@ export type FileDecision = {
   rows: number | null;
   columns: number | null;
   sniff: Sniff | null;
-  reason?: "rows" | "bytes" | "spreadsheet";
+  reason?: "rows" | "cells" | "bytes" | "spreadsheet";
 };
 
 function extOf(name: string): string {
@@ -44,7 +44,7 @@ export async function classifyFile(file: File): Promise<FileDecision> {
     rows,
     columns,
     sniff,
-    ...(mode === "unsupported" ? { reason: rows != null && rows > LARGE_DATA.supportedMaxRows ? "rows" as const : "bytes" as const } : {}),
+    ...(mode === "unsupported" ? { reason: rows != null && rows > LARGE_DATA.supportedMaxRows ? "rows" as const : rows != null && columns != null ? "cells" as const : "bytes" as const } : {}),
   };
 }
 
@@ -72,7 +72,9 @@ export function opensAsSplit(decision: FileDecision): boolean {
   return decision.rows == null || decision.rows > LARGE_DATA.splitAtRows;
 }
 
-export function unsupportedMessage(rows: number | null): string {
+export function unsupportedMessage(rows: number | null, columns: number | null = null): string {
+  const block = describeBlock(rows, columns);
+  if (block.kind === "wide") return block.body;
   const size = rows != null ? ` (about ${rows.toLocaleString()} rows)` : "";
   return `This dataset${size} is larger than the currently supported processing range (up to ${LARGE_DATA.supportedMaxRows.toLocaleString()} rows).`;
 }

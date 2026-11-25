@@ -94,6 +94,66 @@ export function workingCopyMessage(): string {
   return `This file is too big to load in full in your browser. DataSimplr can prepare a ${rows}-row working file from it here. Results from that file are labeled as a sample. The original file is not changed.`;
 }
 
+export type BlockInfo = {
+  kind: "wide" | "tall" | "other";
+  title: string;
+  /** Short line for the panel heading. */
+  headline: string;
+  body: string;
+  /** Rows to offer as a labeled sample, or null when a sample would not shrink the file. */
+  sampleRows: number | null;
+  /** Most columns that fit at this row count, or null when columns are not the problem. */
+  maxColumns: number | null;
+  cells: number | null;
+};
+
+const millions = (cells: number) => `${(cells / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })} million`;
+
+/** Says which dimension of the file is over the limit, and which fixes would actually help. */
+export function describeBlock(rows: number | null, columns: number | null): BlockInfo {
+  const cap = LARGE_DATA.supportedMaxCells;
+  const cells = rows != null && columns != null ? rows * columns : null;
+  const rowText = rows != null ? rows.toLocaleString() : "";
+  if (rows != null && rows > LARGE_DATA.supportedMaxRows) {
+    const sample = LARGE_DATA.sampleOfferRows;
+    return {
+      kind: "tall",
+      title: "Prepare a working file",
+      headline: "This dataset is larger than the currently supported processing range.",
+      body: `This file has about ${rowText} rows, more than the ${LARGE_DATA.supportedMaxRows.toLocaleString()} DataSimplr can load in full. It can prepare a ${sample.toLocaleString()}-row working file from it here. Results from that file are labeled as a sample. The original file is not changed.`,
+      sampleRows: sample,
+      maxColumns: null,
+      cells,
+    };
+  }
+  if (rows != null && columns != null && cells != null && cells > cap) {
+    const maxColumns = Math.max(1, Math.floor(cap / rows));
+    const rowsFit = Math.max(1000, Math.floor(cap / columns));
+    return {
+      kind: "wide",
+      title: "This file is too wide to load in full",
+      headline: `This file is too wide to load in full: ${rowText} rows × ${columns} columns.`,
+      body: `This file has ${rowText} rows × ${columns} columns (${millions(cells)} cells). It is not too long, it is too wide: the limit is about ${millions(cap)} cells. Choose the columns you need (up to ${maxColumns} fit at this row count), or work from a ${rowsFit.toLocaleString()}-row sample that keeps every column. The original file is not changed.`,
+      sampleRows: rowsFit < rows ? rowsFit : null,
+      maxColumns,
+      cells,
+    };
+  }
+  const sample = LARGE_DATA.sampleOfferRows;
+  const offerSample = rows == null || rows > sample;
+  return {
+    kind: "other",
+    title: offerSample ? "Prepare a working file" : "This file could not be loaded in full",
+    headline: "This dataset is larger than the currently supported processing range.",
+    body: offerSample
+      ? workingCopyMessage()
+      : `This file could not be loaded in full in your browser${rows != null ? ` (${rowText} rows${columns != null ? ` × ${columns} columns` : ""})` : ""}. Filter it by a column value first, or choose fewer columns. The original file is not changed.`,
+    sampleRows: offerSample ? sample : null,
+    maxColumns: null,
+    cells,
+  };
+}
+
 export function rangeCopy(): { standard: string; large: string; above: string } {
   const standardMax = LARGE_DATA.standardMaxRows.toLocaleString();
   const largeMax = LARGE_DATA.supportedMaxRows.toLocaleString();

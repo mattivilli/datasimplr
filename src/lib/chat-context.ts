@@ -182,7 +182,13 @@ export async function prepareChatFile(file: File, sheetName?: string): Promise<C
   if ((ext === "csv" || ext === "tsv" || ext === "txt") && file.size > LARGE_DATA.sniffSkipBytes) {
     const decision = await classifyFile(file);
     if (decision.mode === "unsupported") {
-      throw new Error(`${unsupportedMessage(decision.rows)} Open Upload & Analyze to take a labeled sample or filter it first.`);
+      throw new Error(
+        `${unsupportedMessage(decision.rows, decision.columns)} ${
+          decision.reason === "rows" || decision.rows == null
+            ? "Open Upload & Analyze to take a labeled sample or filter it first."
+            : "Open Upload & Analyze to choose columns or take a labeled sample."
+        }`,
+      );
     }
     if (decision.mode === "large") {
       if (typeof window === "undefined") throw new Error("Large files are analysed in the browser.");

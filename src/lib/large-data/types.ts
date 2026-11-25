@@ -137,4 +137,6 @@ export type OpenOptions = {
   /** Load a sample instead of the full file. Results must be labeled as a sample. */
   sampleRows?: number;
   filter?: { column: string; value: string };
+  /** Load only these columns. Used when a file is too wide to load in full. */
+  columns?: string[];
 };
